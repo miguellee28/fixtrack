@@ -6,19 +6,31 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.view.ViewGroup
+import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ListView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var barraNavegacion: BottomNavigationView
     private lateinit var contenedorPantallas: FrameLayout
+    private lateinit var viewModel: DispositivosViewModel
 
     companion object {
         private const val ID_INICIO = 1
@@ -31,6 +43,12 @@ class MainActivity : AppCompatActivity() {
         const val PREFS_ORDEN = "orden_lista"
     }
 
+    private val resultadoAgregarDispositivo = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.cargarDispositivos()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -38,6 +56,8 @@ class MainActivity : AppCompatActivity() {
 
         barraNavegacion = findViewById(R.id.barra_navegacion)
         contenedorPantallas = findViewById(R.id.contenedor_pantallas)
+
+        viewModel = ViewModelProvider(this, DispositivosViewModelFactory(application))[DispositivosViewModel::class.java]
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { vista, insets ->
             val barrasSistema = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -47,26 +67,29 @@ class MainActivity : AppCompatActivity() {
 
         cargarPreferencias()
         configurarBarra()
+        observarDispositivos()
     }
 
-    // Cargar preferencias al iniciar la app
+    override fun onResume() {
+        super.onResume()
+        viewModel.cargarDispositivos()
+    }
+
+    private fun observarDispositivos() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.dispositivos.collect { lista ->
+                    val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
+                    listView?.adapter = AdaptadorDispositivos(this@MainActivity, lista)
+                }
+            }
+        }
+    }
+
     private fun cargarPreferencias() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val nombreUsuario = prefs.getString(PREFS_USUARIO, "Usuario")
-        val temaOscuro = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
-        val orden = prefs.getInt(PREFS_ORDEN, 0)
-
         Toast.makeText(this, "Bienvenido: $nombreUsuario", Toast.LENGTH_SHORT).show()
-    }
-
-    // Guardar preferencias
-    private fun guardarPreferencias(nombre: String, temaOscuro: Boolean, orden: Int) {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
-            .putString(PREFS_USUARIO, nombre)
-            .putBoolean(PREFS_TEMA_OSCURO, temaOscuro)
-            .putInt(PREFS_ORDEN, orden)
-            .apply()
     }
 
     private fun configurarBarra() {
@@ -97,6 +120,7 @@ class MainActivity : AppCompatActivity() {
             ID_DISPOSITIVOS -> {
                 mostrarPantalla(R.layout.layout_dispositivos)
                 configurarBotonAgregar()
+                viewModel.cargarDispositivos()
                 true
             }
             ID_CALENDARIO -> {
@@ -120,9 +144,27 @@ class MainActivity : AppCompatActivity() {
         val boton = contenedorPantallas.findViewById<Button>(R.id.boton_agregar)
         boton?.setOnClickListener {
             val intent = Intent(this, AgregarDispositivoActivity::class.java)
-            intent.putExtra(AgregarDispositivoActivity.EXTRA_NOMBRE_DISPOSITIVO, "")
-            intent.putExtra(AgregarDispositivoActivity.EXTRA_CATEGORIA, "")
-            startActivity(intent)
+            resultadoAgregarDispositivo.launch(intent)
+        }
+    }
+
+    class AdaptadorDispositivos(
+        private val contexto: Context,
+        private val dispositivos: List<Dispositivo>
+    ) : BaseAdapter() {
+
+        override fun getCount() = dispositivos.size
+        override fun getItem(posicion: Int) = dispositivos[posicion]
+        override fun getItemId(posicion: Int) = dispositivos[posicion].id
+
+        override fun getView(posicion: Int, vistaReciclada: View?, parent: ViewGroup): View {
+            val vista = vistaReciclada ?: LayoutInflater.from(contexto)
+                .inflate(R.layout.item_dispositivo_lista, parent, false)
+
+            val dispositivo = dispositivos[posicion]
+            vista.findViewById<TextView>(R.id.texto_nombre).text = dispositivo.nombre
+
+            return vista
         }
     }
 }

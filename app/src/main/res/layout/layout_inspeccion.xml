@@ -46,7 +46,7 @@
         android:layout_marginBottom="2dp" />
 
     <EditText
-        android:id="@+id/campo_descripcion"
+        android:id="@+id/campo_descripcion_inspeccion"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="Describe la inspección..."
@@ -82,7 +82,7 @@
         android:layout_marginBottom="2dp" />
 
     <Spinner
-        android:id="@+id/spinner_repetir"
+        android:id="@+id/spinner_repetir_inspeccion"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:entries="@array/opciones_repeticion"

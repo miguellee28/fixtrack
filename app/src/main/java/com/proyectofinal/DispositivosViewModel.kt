@@ -27,11 +27,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
     private val _mensaje = MutableStateFlow<String?>(null)
     val mensaje: StateFlow<String?> = _mensaje.asStateFlow()
 
-    init {
-        // Carga inicial vacía - los datos se cargan bajo demanda
-    }
-
-    // ==================== DISPOSITIVOS ====================
 
     fun cargarDispositivos() {
         viewModelScope.launch {
@@ -131,6 +126,32 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             }
             _mensaje.value = "Inspección eliminada"
             cargarInspecciones()
+        }
+    }
+
+    // ==================== GUARDAR TODO ====================
+
+    fun guardarDispositivoConTareaEInspeccion(
+        dispositivo: Dispositivo,
+        tarea: Tarea?,
+        inspeccion: Inspeccion?
+    ) {
+        viewModelScope.launch {
+            val id = withContext(Dispatchers.IO) {
+                repository.insertar(dispositivo)
+            }
+            if (tarea != null) {
+                withContext(Dispatchers.IO) {
+                    repository.insertarTarea(tarea.copy(dispositivoId = id))
+                }
+            }
+            if (inspeccion != null) {
+                withContext(Dispatchers.IO) {
+                    repository.insertarInspeccion(inspeccion.copy(dispositivoId = id))
+                }
+            }
+            _mensaje.value = "Dispositivo, tarea e inspección guardados"
+            cargarDispositivos()
         }
     }
 

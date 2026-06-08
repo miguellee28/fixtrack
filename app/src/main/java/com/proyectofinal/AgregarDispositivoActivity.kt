@@ -1,14 +1,11 @@
 package com.proyectofinal
 
-import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
-import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.EditText
-import android.widget.ListView
+import android.widget.LinearLayout
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -16,22 +13,19 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class AgregarDispositivoActivity : AppCompatActivity() {
-
-    companion object {
-        const val EXTRA_NOMBRE_DISPOSITIVO = "nombre_dispositivo"
-        const val EXTRA_CATEGORIA = "categoria"
-    }
 
     private lateinit var viewModel: DispositivosViewModel
 
     private lateinit var botonManual: Button
     private lateinit var botonIA: Button
-    private lateinit var listaAcciones: ListView
-    private lateinit var botonAgregarTarea: Button
-    private lateinit var botonAgregarInspeccion: Button
+    private lateinit var contenedorTarjetas: LinearLayout
     private lateinit var botonAceptar: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -49,23 +43,23 @@ class AgregarDispositivoActivity : AppCompatActivity() {
 
         botonManual = findViewById(R.id.opcion_manual)
         botonIA = findViewById(R.id.opcion_ia)
-        listaAcciones = findViewById(R.id.lista_acciones)
-        botonAgregarTarea = findViewById(R.id.boton_agregar_tarea)
-        botonAgregarInspeccion = findViewById(R.id.boton_agregar_inspeccion)
+        contenedorTarjetas = findViewById(R.id.contenedor_tarjetas)
         botonAceptar = findViewById(R.id.boton_aceptar)
 
         configurarToggle()
         configurarBotones()
         observarViewModel()
-        mostrarDetalleEnLista()
+        mostrarTarjetas()
     }
 
     private fun observarViewModel() {
         lifecycleScope.launch {
             viewModel.mensaje.collect { msg ->
-                msg?.let {
-                    Toast.makeText(this@AgregarDispositivoActivity, it, Toast.LENGTH_SHORT).show()
+                if (msg != null) {
+                    Toast.makeText(this@AgregarDispositivoActivity, msg, Toast.LENGTH_SHORT).show()
                     viewModel.limpiarMensaje()
+                    setResult(RESULT_OK)
+                    finish()
                 }
             }
         }
@@ -77,7 +71,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonManual.setTextColor(resources.getColor(R.color.white, theme))
             botonIA.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
             botonIA.setTextColor(resources.getColor(R.color.black, theme))
-            mostrarDetalleEnLista()
+            mostrarTarjetas()
         }
 
         botonIA.setOnClickListener {
@@ -85,50 +79,74 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonIA.setTextColor(resources.getColor(R.color.white, theme))
             botonManual.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
             botonManual.setTextColor(resources.getColor(R.color.black, theme))
-            ocultarDetalleEnLista()
+            ocultarTarjetas()
         }
     }
 
     private fun configurarBotones() {
-        botonAgregarTarea.setOnClickListener {
-            Toast.makeText(this, "Agregar Tarea", Toast.LENGTH_SHORT).show()
-        }
-
-        botonAgregarInspeccion.setOnClickListener {
-            Toast.makeText(this, "Agregar Inspección", Toast.LENGTH_SHORT).show()
-        }
-
         botonAceptar.setOnClickListener {
-            val intent = Intent(this, DetalleDispositivoActivity::class.java)
-            intent.putExtra(EXTRA_NOMBRE_DISPOSITIVO, "Nuevo Dispositivo")
-            intent.putExtra(EXTRA_CATEGORIA, "Sin categoría")
-            startActivity(intent)
+            try {
+                val nombre = contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre)?.text.toString().trim()
+                val marca = contenedorTarjetas.findViewById<EditText>(R.id.campo_marca)?.text.toString().trim()
+                val modelo = contenedorTarjetas.findViewById<EditText>(R.id.campo_modelo)?.text.toString().trim()
+                val categoria = contenedorTarjetas.findViewById<Spinner>(R.id.spinner_categoria)?.selectedItem?.toString() ?: ""
+
+                if (nombre.isEmpty() || marca.isEmpty() || modelo.isEmpty()) {
+                    Toast.makeText(this, "Complete nombre, marca y modelo del dispositivo", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                val dispositivo = Dispositivo(nombre = nombre, categoria = categoria, marca = marca, modelo = modelo)
+
+                val tarea = construirTarea()
+                val inspeccion = construirInspeccion()
+
+                viewModel.guardarDispositivoConTareaEInspeccion(dispositivo, tarea, inspeccion)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
-    private fun mostrarDetalleEnLista() {
+    private fun construirTarea(): Tarea? {
+        val nombre = contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre_tarea)?.text.toString().trim()
+        if (nombre.isEmpty()) return null
+
+        val desc = contenedorTarjetas.findViewById<EditText>(R.id.campo_descripcion)?.text.toString().trim()
+        val repetir = contenedorTarjetas.findViewById<Spinner>(R.id.spinner_repetir)?.selectedItem?.toString() ?: "Una vez"
+        val fecha = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+            Date(contenedorTarjetas.findViewById<android.widget.CalendarView>(R.id.calendario_tarea)?.date ?: System.currentTimeMillis())
+        )
+
+        return Tarea(nombre = nombre, descripcion = desc, fecha = fecha, repetirCada = repetir)
+    }
+
+    private fun construirInspeccion(): Inspeccion? {
+        val nombre = contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre_inspeccion)?.text.toString().trim()
+        if (nombre.isEmpty()) return null
+
+        val desc = contenedorTarjetas.findViewById<EditText>(R.id.campo_descripcion_inspeccion)?.text.toString().trim()
+        val repetir = contenedorTarjetas.findViewById<Spinner>(R.id.spinner_repetir_inspeccion)?.selectedItem?.toString() ?: "Una vez"
+        val fecha = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(
+            Date(contenedorTarjetas.findViewById<android.widget.CalendarView>(R.id.calendario_inspeccion)?.date ?: System.currentTimeMillis())
+        )
+
+        return Inspeccion(nombre = nombre, descripcion = desc, fecha = fecha, repetirCada = repetir)
+    }
+
+    private fun mostrarTarjetas() {
+        contenedorTarjetas.removeAllViews()
         val layouts = listOf(
             R.layout.layout_detalle_dispositivo,
             R.layout.layout_tarea,
             R.layout.layout_inspeccion
         )
-
-        val adaptador = object : BaseAdapter() {
-            override fun getCount() = layouts.size
-            override fun getItem(posicion: Int) = null
-            override fun getItemId(posicion: Int) = 0L
-
-            override fun getView(posicion: Int, vistaReciclada: View?, parent: ViewGroup): View {
-                val vista = vistaReciclada ?: LayoutInflater.from(this@AgregarDispositivoActivity)
-                    .inflate(layouts[posicion], parent, false)
-                return vista
-            }
+        for (layout in layouts) {
+            LayoutInflater.from(this).inflate(layout, contenedorTarjetas, true)
         }
-
-        listaAcciones.adapter = adaptador
     }
 
-    private fun ocultarDetalleEnLista() {
-        listaAcciones.adapter = null
+    private fun ocultarTarjetas() {
+        contenedorTarjetas.removeAllViews()
     }
 }

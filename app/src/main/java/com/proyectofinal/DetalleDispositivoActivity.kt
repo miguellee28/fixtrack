@@ -3,6 +3,7 @@ package com.proyectofinal
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
+import android.widget.Spinner
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -24,6 +25,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
     private lateinit var campoNombre: EditText
     private lateinit var campoMarca: EditText
     private lateinit var campoModelo: EditText
+    private lateinit var spinnerCategoria: Spinner
     private lateinit var botonGuardar: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,13 +44,8 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         campoNombre = findViewById(R.id.campo_nombre)
         campoMarca = findViewById(R.id.campo_marca)
         campoModelo = findViewById(R.id.campo_modelo)
+        spinnerCategoria = findViewById(R.id.spinner_categoria)
         botonGuardar = findViewById(R.id.boton_guardar)
-
-        // Recibe datos del Intent
-        val nombre = intent.getStringExtra(EXTRA_NOMBRE_DISPOSITIVO) ?: ""
-        val categoria = intent.getStringExtra(EXTRA_CATEGORIA) ?: ""
-
-        campoNombre.setText(nombre)
 
         observarViewModel()
 
@@ -56,6 +53,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
             val nombreDispositivo = campoNombre.text.toString()
             val marca = campoMarca.text.toString()
             val modelo = campoModelo.text.toString()
+            val categoria = spinnerCategoria.selectedItem.toString()
 
             if (nombreDispositivo.isEmpty() || marca.isEmpty() || modelo.isEmpty()) {
                 Toast.makeText(this, "Todos los campos son obligatorios", Toast.LENGTH_SHORT).show()
@@ -79,6 +77,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
                 msg?.let {
                     Toast.makeText(this@DetalleDispositivoActivity, it, Toast.LENGTH_SHORT).show()
                     viewModel.limpiarMensaje()
+                    setResult(RESULT_OK)
                     finish()
                 }
             }
