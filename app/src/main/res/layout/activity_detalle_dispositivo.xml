@@ -60,7 +60,6 @@
                 android:id="@+id/campo_nombre"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Ej: Sensor de temperatura"
                 android:inputType="text"
                 android:padding="8dp"
                 android:textSize="13sp"
@@ -93,7 +92,6 @@
                 android:id="@+id/campo_marca"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Ej: Samsung"
                 android:inputType="text"
                 android:padding="8dp"
                 android:textSize="13sp"
@@ -111,7 +109,6 @@
                 android:id="@+id/campo_modelo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Ej: Galaxy S24"
                 android:inputType="text"
                 android:padding="8dp"
                 android:textSize="13sp" />
@@ -125,14 +122,6 @@
             android:text="Guardar cambios"
             android:textAllCaps="false"
             android:layout_marginTop="16dp" />
-
-        <Button
-            android:id="@+id/boton_compartir"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Compartir dispositivo"
-            android:textAllCaps="false"
-            android:layout_marginTop="8dp" />
 
     </LinearLayout>
 

@@ -47,14 +47,11 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun actualizarDispositivo(dispositivo: Dispositivo) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.actualizar(dispositivo)
-            }
-            _mensaje.value = "Dispositivo actualizado"
-            cargarDispositivos()
+    suspend fun actualizarDispositivo(dispositivo: Dispositivo) {
+        withContext(Dispatchers.IO) {
+            repository.actualizar(dispositivo)
         }
+        cargarDispositivos()
     }
 
     fun eliminarDispositivo(id: Long) {
@@ -131,28 +128,25 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     // ==================== GUARDAR TODO ====================
 
-    fun guardarDispositivoConTareaEInspeccion(
+    suspend fun guardarDispositivoConTareaEInspeccion(
         dispositivo: Dispositivo,
         tarea: Tarea?,
         inspeccion: Inspeccion?
     ) {
-        viewModelScope.launch {
-            val id = withContext(Dispatchers.IO) {
-                repository.insertar(dispositivo)
-            }
-            if (tarea != null) {
-                withContext(Dispatchers.IO) {
-                    repository.insertarTarea(tarea.copy(dispositivoId = id))
-                }
-            }
-            if (inspeccion != null) {
-                withContext(Dispatchers.IO) {
-                    repository.insertarInspeccion(inspeccion.copy(dispositivoId = id))
-                }
-            }
-            _mensaje.value = "Dispositivo, tarea e inspección guardados"
-            cargarDispositivos()
+        val id = withContext(Dispatchers.IO) {
+            repository.insertar(dispositivo)
         }
+        if (tarea != null) {
+            withContext(Dispatchers.IO) {
+                repository.insertarTarea(tarea.copy(dispositivoId = id))
+            }
+        }
+        if (inspeccion != null) {
+            withContext(Dispatchers.IO) {
+                repository.insertarInspeccion(inspeccion.copy(dispositivoId = id))
+            }
+        }
+        cargarDispositivos()
     }
 
     // ==================== MENSAJE ====================

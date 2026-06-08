@@ -47,25 +47,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
 
         configurarToggle()
         configurarBotones()
-        observarViewModel()
         mostrarTarjetas()
-    }
-
-    private fun observarViewModel() {
-        lifecycleScope.launch {
-            viewModel.mensaje.collect { msg ->
-                if (msg != null) {
-                    Toast.makeText(this@AgregarDispositivoActivity, msg, Toast.LENGTH_SHORT).show()
-                    viewModel.limpiarMensaje()
-                    setResult(RESULT_OK)
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        if (!isFinishing) {
-                            finish()
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private fun configurarToggle() {
@@ -88,25 +70,25 @@ class AgregarDispositivoActivity : AppCompatActivity() {
 
     private fun configurarBotones() {
         botonAceptar.setOnClickListener {
-            try {
-                val nombre = contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre)?.text.toString().trim()
-                val marca = contenedorTarjetas.findViewById<EditText>(R.id.campo_marca)?.text.toString().trim()
-                val modelo = contenedorTarjetas.findViewById<EditText>(R.id.campo_modelo)?.text.toString().trim()
-                val categoria = contenedorTarjetas.findViewById<Spinner>(R.id.spinner_categoria)?.selectedItem?.toString() ?: ""
+            val nombre = contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre)?.text.toString().trim()
+            val marca = contenedorTarjetas.findViewById<EditText>(R.id.campo_marca)?.text.toString().trim()
+            val modelo = contenedorTarjetas.findViewById<EditText>(R.id.campo_modelo)?.text.toString().trim()
+            val categoria = contenedorTarjetas.findViewById<Spinner>(R.id.spinner_categoria)?.selectedItem?.toString() ?: ""
 
-                if (nombre.isEmpty() || marca.isEmpty() || modelo.isEmpty()) {
-                    Toast.makeText(this, "Complete nombre, marca y modelo del dispositivo", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
+            if (nombre.isEmpty() || marca.isEmpty() || modelo.isEmpty()) {
+                Toast.makeText(this, "Complete nombre, marca y modelo del dispositivo", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
-                val dispositivo = Dispositivo(nombre = nombre, categoria = categoria, marca = marca, modelo = modelo)
+            val dispositivo = Dispositivo(nombre = nombre, categoria = categoria, marca = marca, modelo = modelo)
+            val tarea = construirTarea()
+            val inspeccion = construirInspeccion()
 
-                val tarea = construirTarea()
-                val inspeccion = construirInspeccion()
-
+            lifecycleScope.launch {
                 viewModel.guardarDispositivoConTareaEInspeccion(dispositivo, tarea, inspeccion)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@AgregarDispositivoActivity, "Dispositivo guardado", Toast.LENGTH_SHORT).show()
+                setResult(RESULT_OK)
+                finish()
             }
         }
     }
