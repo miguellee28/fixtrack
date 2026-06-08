@@ -14,7 +14,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = DispositivoRepository(app)
 
-    // Estado observable con StateFlow
     private val _dispositivos = MutableStateFlow<List<Dispositivo>>(emptyList())
     val dispositivos: StateFlow<List<Dispositivo>> = _dispositivos.asStateFlow()
 
@@ -23,9 +22,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _inspecciones = MutableStateFlow<List<Inspeccion>>(emptyList())
     val inspecciones: StateFlow<List<Inspeccion>> = _inspecciones.asStateFlow()
-
-    private val _mensaje = MutableStateFlow<String?>(null)
-    val mensaje: StateFlow<String?> = _mensaje.asStateFlow()
 
 
     fun cargarDispositivos() {
@@ -42,7 +38,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.insertar(dispositivo)
             }
-            _mensaje.value = "Dispositivo guardado"
             cargarDispositivos()
         }
     }
@@ -59,7 +54,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.eliminar(id)
             }
-            _mensaje.value = "Dispositivo eliminado"
             cargarDispositivos()
         }
     }
@@ -80,7 +74,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.insertarTarea(tarea)
             }
-            _mensaje.value = "Tarea guardada"
             cargarTareas()
         }
     }
@@ -90,7 +83,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.eliminarTarea(id)
             }
-            _mensaje.value = "Tarea eliminada"
             cargarTareas()
         }
     }
@@ -111,7 +103,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.insertarInspeccion(inspeccion)
             }
-            _mensaje.value = "Inspección guardada"
             cargarInspecciones()
         }
     }
@@ -121,7 +112,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.eliminarInspeccion(id)
             }
-            _mensaje.value = "Inspección eliminada"
             cargarInspecciones()
         }
     }
@@ -147,11 +137,5 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         cargarDispositivos()
-    }
-
-    // ==================== MENSAJE ====================
-
-    fun limpiarMensaje() {
-        _mensaje.value = null
     }
 }

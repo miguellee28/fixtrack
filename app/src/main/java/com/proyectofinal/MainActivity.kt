@@ -11,11 +11,9 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.BaseAdapter
 import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ListView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
@@ -40,9 +38,7 @@ class MainActivity : AppCompatActivity() {
         private const val ID_DISPOSITIVOS = 3
         private const val ID_AJUSTES = 4
         const val PREFS_NAME = "mis_preferencias"
-        const val PREFS_USUARIO = "nombre_usuario"
         const val PREFS_TEMA_OSCURO = "tema_oscuro"
-        const val PREFS_ORDEN = "orden_lista"
     }
 
     private val resultadoAgregarDispositivo = registerForActivityResult(
