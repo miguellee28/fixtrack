@@ -8,21 +8,23 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import kotlinx.coroutines.launch
 
@@ -44,6 +46,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val resultadoAgregarDispositivo = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.cargarDispositivos()
+    }
+
+    private val resultadoDetalleDispositivo = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.cargarDispositivos()
@@ -77,10 +85,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun observarDispositivos() {
         lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.dispositivos.collect { lista ->
-                    val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
-                    listView?.adapter = AdaptadorDispositivos(this@MainActivity, lista)
+            viewModel.dispositivos.collect { lista ->
+                val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
+                if (listView != null) {
+                    listView.adapter = AdaptadorDispositivos(this@MainActivity, lista)
                 }
             }
         }
@@ -89,7 +97,21 @@ class MainActivity : AppCompatActivity() {
     private fun cargarPreferencias() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val nombreUsuario = prefs.getString(PREFS_USUARIO, "Usuario")
+        val temaOscuro = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
+
+        if (temaOscuro) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        } else {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
+
         Toast.makeText(this, "Bienvenido: $nombreUsuario", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun guardarPreferencias(nombre: String) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(PREFS_USUARIO, nombre).apply()
+        Toast.makeText(this, "Preferencias guardadas", Toast.LENGTH_SHORT).show()
     }
 
     private fun configurarBarra() {
@@ -120,7 +142,9 @@ class MainActivity : AppCompatActivity() {
             ID_DISPOSITIVOS -> {
                 mostrarPantalla(R.layout.layout_dispositivos)
                 configurarBotonAgregar()
+                configurarClickLista()
                 viewModel.cargarDispositivos()
+                asignarListaDispositivos()
                 true
             }
             ID_CALENDARIO -> {
@@ -129,9 +153,64 @@ class MainActivity : AppCompatActivity() {
             }
             ID_AJUSTES -> {
                 mostrarPantalla(R.layout.layout_ajustes)
+                configurarAjustes()
                 true
             }
             else -> false
+        }
+    }
+
+    private fun asignarListaDispositivos() {
+        val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
+        if (listView != null) {
+            listView.adapter = AdaptadorDispositivos(this, viewModel.dispositivos.value)
+        }
+    }
+
+    private fun configurarClickLista() {
+        val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
+        listView?.onItemClickListener = AdapterView.OnItemClickListener { _, _, posicion, _ ->
+            val dispositivo = viewModel.dispositivos.value.getOrNull(posicion) ?: return@OnItemClickListener
+            val intent = Intent(this, DetalleDispositivoActivity::class.java).apply {
+                putExtra(DetalleDispositivoActivity.EXTRA_ID, dispositivo.id)
+                putExtra(DetalleDispositivoActivity.EXTRA_NOMBRE_DISPOSITIVO, dispositivo.nombre)
+                putExtra(DetalleDispositivoActivity.EXTRA_CATEGORIA, dispositivo.categoria)
+                putExtra(DetalleDispositivoActivity.EXTRA_MARCA, dispositivo.marca)
+                putExtra(DetalleDispositivoActivity.EXTRA_MODELO, dispositivo.modelo)
+            }
+            resultadoDetalleDispositivo.launch(intent)
+        }
+    }
+
+    private fun configurarAjustes() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val campoNombre = contenedorPantallas.findViewById<EditText>(R.id.campo_nombre_usuario)
+        val botonGuardar = contenedorPantallas.findViewById<Button>(R.id.boton_guardar_ajustes)
+        val switchOscuro = contenedorPantallas.findViewById<SwitchCompat>(R.id.switch_modo_oscuro)
+
+        if (campoNombre != null) {
+            campoNombre.setText(prefs.getString(PREFS_USUARIO, ""))
+        }
+
+        if (switchOscuro != null) {
+            switchOscuro.isChecked = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
+            switchOscuro.setOnCheckedChangeListener { _, activo ->
+                prefs.edit().putBoolean(PREFS_TEMA_OSCURO, activo).apply()
+                if (activo) {
+                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                } else {
+                    AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                }
+            }
+        }
+
+        botonGuardar?.setOnClickListener {
+            val nombre = campoNombre?.text.toString().trim()
+            if (nombre.isNotEmpty()) {
+                guardarPreferencias(nombre)
+            } else {
+                Toast.makeText(this, "Ingresa un nombre", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -163,6 +242,8 @@ class MainActivity : AppCompatActivity() {
 
             val dispositivo = dispositivos[posicion]
             vista.findViewById<TextView>(R.id.texto_nombre).text = dispositivo.nombre
+            vista.findViewById<TextView>(R.id.texto_marca).text = dispositivo.marca
+            vista.findViewById<TextView>(R.id.texto_modelo).text = dispositivo.modelo
 
             return vista
         }
