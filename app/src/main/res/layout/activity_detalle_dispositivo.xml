@@ -123,6 +123,14 @@
             android:textAllCaps="false"
             android:layout_marginTop="16dp" />
 
+        <Button
+            android:id="@+id/boton_compartir"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Compartir"
+            android:textAllCaps="false"
+            android:layout_marginTop="8dp" />
+
     </LinearLayout>
 
 </ScrollView>

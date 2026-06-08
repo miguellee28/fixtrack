@@ -1,5 +1,6 @@
 package com.proyectofinal
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
@@ -29,6 +30,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
     private lateinit var campoModelo: EditText
     private lateinit var spinnerCategoria: Spinner
     private lateinit var botonGuardar: Button
+    private lateinit var botonCompartir: Button
 
     private var dispositivoId: Long = 0
 
@@ -50,6 +52,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         campoModelo = findViewById(R.id.campo_modelo)
         spinnerCategoria = findViewById(R.id.spinner_categoria)
         botonGuardar = findViewById(R.id.boton_guardar)
+        botonCompartir = findViewById(R.id.boton_compartir)
 
         dispositivoId = intent.getLongExtra(EXTRA_ID, 0)
         campoNombre.setText(intent.getStringExtra(EXTRA_NOMBRE_DISPOSITIVO) ?: "")
@@ -87,6 +90,19 @@ class DetalleDispositivoActivity : AppCompatActivity() {
                 Toast.makeText(this@DetalleDispositivoActivity, "Dispositivo actualizado", Toast.LENGTH_SHORT).show()
                 setResult(RESULT_OK)
                 finish()
+            }
+        }
+
+        botonCompartir.setOnClickListener {
+            val texto = "Dispositivo: ${campoNombre.text}\nMarca: ${campoMarca.text}\nModelo: ${campoModelo.text}\nCategoría: ${spinnerCategoria.selectedItem}"
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, texto)
+            }
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(Intent.createChooser(intent, "Compartir dispositivo"))
+            } else {
+                Toast.makeText(this, "No hay apps disponibles para compartir", Toast.LENGTH_SHORT).show()
             }
         }
     }
