@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/fondo_tarjeta"
+    android:padding="12dp"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp">
+
+    <!-- Titulo -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Detalle del dispositivo"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Foto del dispositivo -->
+    <FrameLayout
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_gravity="center"
+        android:layout_marginBottom="8dp">
+
+        <ImageView
+            android:id="@+id/foto_dispositivo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/fondo_foto_redondeada"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="Foto"
+            android:textColor="#757575"
+            android:textSize="12sp" />
+
+    </FrameLayout>
+
+    <!-- Nombre del dispositivo -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="NOMBRE DEL DISPOSITIVO"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="2dp" />
+
+    <EditText
+        android:id="@+id/campo_nombre"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Ej: Sensor de temperatura"
+        android:inputType="text"
+        android:padding="8dp"
+        android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Categoria -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="CATEGORÍA"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="2dp" />
+
+    <Spinner
+        android:id="@+id/spinner_categoria"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="8dp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Marca -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MARCA"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="2dp" />
+
+    <EditText
+        android:id="@+id/campo_marca"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Ej: Samsung"
+        android:inputType="text"
+        android:padding="8dp"
+        android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Modelo -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MODELO"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="2dp" />
+
+    <EditText
+        android:id="@+id/campo_modelo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Ej: Galaxy S24"
+        android:inputType="text"
+        android:padding="8dp"
+        android:textSize="13sp" />
+
+</LinearLayout>

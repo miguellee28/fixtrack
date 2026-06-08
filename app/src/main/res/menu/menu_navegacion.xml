@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/opcion_inicio"
+        android:icon="@drawable/ic_inicio"
+        android:title="Inicio" />
+
+    <item
+        android:id="@+id/opcion_calendario"
+        android:icon="@drawable/ic_calendario"
+        android:title="Calendario" />
+
+    <item
+        android:id="@+id/opcion_dispositivos"
+        android:icon="@drawable/ic_dispositivos"
+        android:title="Dispositivos" />
+
+    <item
+        android:id="@+id/opcion_ajustes"
+        android:icon="@drawable/ic_ajustes"
+        android:title="Ajustes" />
+
+</menu>
