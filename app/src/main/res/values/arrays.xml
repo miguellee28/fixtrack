@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="opciones_categoria">
+        <item>Electrodoméstico</item>
+        <item>Electrónica</item>
+        <item>Sensor</item>
+        <item>Iluminación</item>
+        <item>Seguridad</item>
+        <item>Climatización</item>
+        <item>Otro</item>
+    </string-array>
+
+    <string-array name="opciones_repeticion">
+        <item>Una vez</item>
+        <item>Semana</item>
+        <item>Mes</item>
+        <item>6 meses</item>
+        <item>1 año</item>
+    </string-array>
+</resources>

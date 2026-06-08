@@ -66,12 +66,10 @@
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
 
-    <Button
-        android:id="@+id/boton_fecha"
+    <CalendarView
+        android:id="@+id/calendario_tarea"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Seleccionar fecha"
-        android:textAllCaps="false"
         android:layout_marginBottom="8dp" />
 
     <!-- Repetir cada -->
@@ -87,6 +85,7 @@
         android:id="@+id/spinner_repetir"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:entries="@array/opciones_repeticion"
         android:padding="8dp" />
 
 </LinearLayout>

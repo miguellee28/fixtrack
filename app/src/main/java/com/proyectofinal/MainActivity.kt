@@ -1,15 +1,13 @@
 package com.proyectofinal
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.ListView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -27,6 +25,10 @@ class MainActivity : AppCompatActivity() {
         private const val ID_CALENDARIO = 2
         private const val ID_DISPOSITIVOS = 3
         private const val ID_AJUSTES = 4
+        const val PREFS_NAME = "mis_preferencias"
+        const val PREFS_USUARIO = "nombre_usuario"
+        const val PREFS_TEMA_OSCURO = "tema_oscuro"
+        const val PREFS_ORDEN = "orden_lista"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,7 +45,28 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        cargarPreferencias()
         configurarBarra()
+    }
+
+    // Cargar preferencias al iniciar la app
+    private fun cargarPreferencias() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val nombreUsuario = prefs.getString(PREFS_USUARIO, "Usuario")
+        val temaOscuro = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
+        val orden = prefs.getInt(PREFS_ORDEN, 0)
+
+        Toast.makeText(this, "Bienvenido: $nombreUsuario", Toast.LENGTH_SHORT).show()
+    }
+
+    // Guardar preferencias
+    private fun guardarPreferencias(nombre: String, temaOscuro: Boolean, orden: Int) {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString(PREFS_USUARIO, nombre)
+            .putBoolean(PREFS_TEMA_OSCURO, temaOscuro)
+            .putInt(PREFS_ORDEN, orden)
+            .apply()
     }
 
     private fun configurarBarra() {
@@ -96,82 +119,10 @@ class MainActivity : AppCompatActivity() {
     private fun configurarBotonAgregar() {
         val boton = contenedorPantallas.findViewById<Button>(R.id.boton_agregar)
         boton?.setOnClickListener {
-            mostrarPantalla(R.layout.layout_agregar_dispositivo)
-            configurarToggleAgregar()
-            configurarBotonesAgregar()
-            mostrarDetalleEnLista()
+            val intent = Intent(this, AgregarDispositivoActivity::class.java)
+            intent.putExtra(AgregarDispositivoActivity.EXTRA_NOMBRE_DISPOSITIVO, "")
+            intent.putExtra(AgregarDispositivoActivity.EXTRA_CATEGORIA, "")
+            startActivity(intent)
         }
-    }
-
-    private fun configurarToggleAgregar() {
-        val botonManual = contenedorPantallas.findViewById<Button>(R.id.opcion_manual)
-        val botonIA = contenedorPantallas.findViewById<Button>(R.id.opcion_ia)
-
-        if (botonManual == null || botonIA == null) return
-
-        botonManual.setOnClickListener {
-            botonManual.setBackgroundResource(R.drawable.fondo_toggle_seleccionado)
-            botonManual.setTextColor(resources.getColor(R.color.white, theme))
-            botonIA.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
-            botonIA.setTextColor(resources.getColor(R.color.black, theme))
-            mostrarDetalleEnLista()
-        }
-
-        botonIA.setOnClickListener {
-            botonIA.setBackgroundResource(R.drawable.fondo_toggle_seleccionado)
-            botonIA.setTextColor(resources.getColor(R.color.white, theme))
-            botonManual.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
-            botonManual.setTextColor(resources.getColor(R.color.black, theme))
-            ocultarDetalleEnLista()
-        }
-    }
-
-    private fun configurarBotonesAgregar() {
-        val botonTarea = contenedorPantallas.findViewById<Button>(R.id.boton_agregar_tarea)
-        val botonInspeccion = contenedorPantallas.findViewById<Button>(R.id.boton_agregar_inspeccion)
-        val botonAceptar = contenedorPantallas.findViewById<Button>(R.id.boton_aceptar)
-
-        botonTarea?.setOnClickListener {
-            Toast.makeText(this, "Agregar Tarea", Toast.LENGTH_SHORT).show()
-        }
-
-        botonInspeccion?.setOnClickListener {
-            Toast.makeText(this, "Agregar Inspección", Toast.LENGTH_SHORT).show()
-        }
-
-        botonAceptar?.setOnClickListener {
-            Toast.makeText(this, "Aceptar", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Muestra las tres tarjetas dentro del ListView
-    private fun mostrarDetalleEnLista() {
-        val listaAcciones = contenedorPantallas.findViewById<ListView>(R.id.lista_acciones) ?: return
-
-        val layouts = listOf(
-            R.layout.layout_detalle_dispositivo,
-            R.layout.layout_tarea,
-            R.layout.layout_inspeccion
-        )
-
-        val adaptador = object : BaseAdapter() {
-            override fun getCount() = layouts.size
-            override fun getItem(posicion: Int) = null
-            override fun getItemId(posicion: Int) = 0L
-
-            override fun getView(posicion: Int, vistaReciclada: View?, parent: ViewGroup): View {
-                val vista = vistaReciclada ?: LayoutInflater.from(this@MainActivity)
-                    .inflate(layouts[posicion], parent, false)
-                return vista
-            }
-        }
-
-        listaAcciones.adapter = adaptador
-    }
-
-    // Oculta la tarjeta de detalle del ListView
-    private fun ocultarDetalleEnLista() {
-        val listaAcciones = contenedorPantallas.findViewById<ListView>(R.id.lista_acciones) ?: return
-        listaAcciones.adapter = null
     }
 }
