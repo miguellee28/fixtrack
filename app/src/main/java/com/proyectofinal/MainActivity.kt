@@ -96,7 +96,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun cargarPreferencias() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val nombreUsuario = prefs.getString(PREFS_USUARIO, "Usuario")
         val temaOscuro = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
 
         if (temaOscuro) {
@@ -104,14 +103,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         }
-
-        Toast.makeText(this, "Bienvenido: $nombreUsuario", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun guardarPreferencias(nombre: String) {
-        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(PREFS_USUARIO, nombre).apply()
-        Toast.makeText(this, "Preferencias guardadas", Toast.LENGTH_SHORT).show()
     }
 
     private fun configurarBarra() {
@@ -184,13 +175,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun configurarAjustes() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val campoNombre = contenedorPantallas.findViewById<EditText>(R.id.campo_nombre_usuario)
-        val botonGuardar = contenedorPantallas.findViewById<Button>(R.id.boton_guardar_ajustes)
         val switchOscuro = contenedorPantallas.findViewById<SwitchCompat>(R.id.switch_modo_oscuro)
-
-        if (campoNombre != null) {
-            campoNombre.setText(prefs.getString(PREFS_USUARIO, ""))
-        }
 
         if (switchOscuro != null) {
             switchOscuro.isChecked = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
@@ -201,15 +186,6 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
                 }
-            }
-        }
-
-        botonGuardar?.setOnClickListener {
-            val nombre = campoNombre?.text.toString().trim()
-            if (nombre.isNotEmpty()) {
-                guardarPreferencias(nombre)
-            } else {
-                Toast.makeText(this, "Ingresa un nombre", Toast.LENGTH_SHORT).show()
             }
         }
     }
