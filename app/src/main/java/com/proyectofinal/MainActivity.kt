@@ -46,29 +46,25 @@ class MainActivity : AppCompatActivity() {
     private val resultadoAgregarDispositivo = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        viewModel.cargarDispositivos()
-        viewModel.cargarHomeData()
-        viewModel.cargarCalendarioData()
+        recargarDatosPrincipales()
     }
 
     private val resultadoDetalleDispositivo = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        viewModel.cargarDispositivos()
+        recargarDatosPrincipales()
     }
 
     private val resultadoAgregarTarea = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        viewModel.cargarHomeData()
-        viewModel.cargarCalendarioData()
+        recargarDatosProgramados()
     }
 
     private val resultadoTareaDetalle = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        viewModel.cargarHomeData()
-        viewModel.cargarCalendarioData()
+        recargarDatosProgramados()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,7 +92,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        recargarDatosPrincipales()
+    }
+
+    private fun recargarDatosPrincipales() {
         viewModel.cargarDispositivos()
+        recargarDatosProgramados()
+    }
+
+    private fun recargarDatosProgramados() {
         viewModel.cargarHomeData()
         viewModel.cargarCalendarioData()
     }
@@ -275,8 +279,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun abrirDetalleGrupo(grupo: List<ItemProgramado>) {
-        val tarea = grupo.firstOrNull { it.tipo == "tarea" }
-        abrirDetalleItem(tarea ?: grupo.first())
+        val tareas = grupo.filter { it.tipo == "tarea" }
+        if (tareas.isNotEmpty()) {
+            val primera = tareas.first()
+            val intent = Intent(this, TareaDetalleActivity::class.java).apply {
+                putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, primera.id)
+                putExtra(TareaDetalleActivity.EXTRA_TAREA_IDS, tareas.map { it.id }.toLongArray())
+                putExtra(TareaDetalleActivity.EXTRA_TAREA_NOMBRE, primera.nombre)
+                putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
+                putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
+            }
+            resultadoTareaDetalle.launch(intent)
+        } else {
+            abrirDetalleItem(grupo.first())
+        }
     }
 
     private fun cargarPreferencias() {

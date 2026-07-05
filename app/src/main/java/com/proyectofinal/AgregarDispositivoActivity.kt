@@ -1,22 +1,35 @@
 package com.proyectofinal
 
 import android.app.DatePickerDialog
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.Toast
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.net.SocketTimeoutException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -30,6 +43,42 @@ class AgregarDispositivoActivity : AppCompatActivity() {
     private lateinit var contenedorTarjetas: LinearLayout
     private lateinit var contenedorBotonesAgregar: LinearLayout
     private lateinit var botonAceptar: Button
+
+    private var modoIA = false
+    private var fotoIaUri: Uri? = null
+    private var fotoIaArchivo: File? = null
+    private var textoEstadoIA: TextView? = null
+    private var textoFuentesIA: TextView? = null
+    private var botonBuscarIA: Button? = null
+    private var imagenDispositivoIA: ImageView? = null
+    private val aiService by lazy {
+        MaintenanceAiService(
+            GoogleGenAiClient(BuildConfig.GOOGLE_GENAI_API_KEY),
+            BraveSearchClient(BuildConfig.BRAVE_SEARCH_API_KEY)
+        )
+    }
+
+    private val resultadoGaleriaIA = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { resultado ->
+        if (resultado.resultCode == RESULT_OK) {
+            resultado.data?.data?.let { uri ->
+                fotoIaUri = uri
+                imagenDispositivoIA?.setImageURI(uri)
+            }
+        }
+    }
+
+    private val resultadoCamaraIA = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { resultado ->
+        if (resultado.resultCode == RESULT_OK) {
+            fotoIaArchivo?.takeIf { it.exists() }?.let { archivo ->
+                fotoIaUri = Uri.fromFile(archivo)
+                imagenDispositivoIA?.setImageURI(fotoIaUri)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +110,8 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonManual.setTextColor(resources.getColor(R.color.white, theme))
             botonIA.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
             botonIA.setTextColor(resources.getColor(R.color.black, theme))
+            modoIA = false
+            fotoIaUri = null
             mostrarTarjetas()
         }
 
@@ -69,6 +120,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonIA.setTextColor(resources.getColor(R.color.white, theme))
             botonManual.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
             botonManual.setTextColor(resources.getColor(R.color.black, theme))
+            modoIA = true
             mostrarDetalleDispositivoParaIA()
         }
     }
@@ -197,6 +249,286 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         contenedorTarjetas.removeAllViews()
         contenedorBotonesAgregar.removeAllViews()
         LayoutInflater.from(this).inflate(R.layout.layout_detalle_dispositivo, contenedorTarjetas, true)
+        configurarFotoDispositivoIA()
+        agregarControlesIA()
+    }
+
+    private fun configurarFotoDispositivoIA() {
+        imagenDispositivoIA = contenedorTarjetas.findViewById(R.id.foto_dispositivo)
+        imagenDispositivoIA?.setOnClickListener {
+            mostrarOpcionesFotoIA()
+        }
+    }
+
+    private fun agregarControlesIA() {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.fondo_tarjeta)
+            setPadding(16, 14, 16, 14)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(4, 0, 4, 16)
+            }
+        }
+
+        panel.addView(TextView(this).apply {
+            text = "Asistente IA"
+            textSize = 18f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, 8)
+        })
+
+        panel.addView(TextView(this).apply {
+            text = "Toca la foto del dispositivo para agregar una imagen opcional."
+            textSize = 13f
+            setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+            setPadding(0, 0, 0, 10)
+        })
+
+        botonBuscarIA = Button(this).apply {
+            text = "Buscar mantenimiento con IA"
+            setAllCaps(false)
+            setOnClickListener { buscarMantenimientoConIA() }
+        }
+        panel.addView(botonBuscarIA)
+
+        textoEstadoIA = TextView(this).apply {
+            textSize = 13f
+            setPadding(0, 10, 0, 4)
+            setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+        }
+        panel.addView(textoEstadoIA)
+
+        textoFuentesIA = TextView(this).apply {
+            textSize = 12f
+            setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+        }
+        panel.addView(textoFuentesIA)
+        contenedorTarjetas.addView(panel)
+    }
+
+    private fun buscarMantenimientoConIA() {
+        val nombre = contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre)?.text.toString().trim()
+        val marca = contenedorTarjetas.findViewById<EditText>(R.id.campo_marca)?.text.toString().trim()
+        val modelo = contenedorTarjetas.findViewById<EditText>(R.id.campo_modelo)?.text.toString().trim()
+        val categoria = contenedorTarjetas.findViewById<Spinner>(R.id.spinner_categoria)?.selectedItem?.toString() ?: ""
+
+        if (fotoIaUri == null && marca.isBlank() && modelo.isBlank()) {
+            Toast.makeText(this, "Agrega una foto o escribe marca/modelo", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        botonBuscarIA?.isEnabled = false
+        textoEstadoIA?.text = "Buscando fuentes y generando calendario..."
+        textoFuentesIA?.text = ""
+
+        lifecycleScope.launch {
+            val resultado = runCatching {
+                actualizarEstadoIA("Preparando datos...")
+                val imageBytes = withContext(Dispatchers.IO) { leerFotoIA() }
+                withContext(Dispatchers.IO) {
+                    aiService.generateSchedule(nombre, categoria, marca, modelo, imageBytes) { mensaje ->
+                        runOnUiThread { actualizarEstadoIA(mensaje) }
+                    }
+                }
+            }
+
+            botonBuscarIA?.isEnabled = true
+            resultado
+                .onSuccess {
+                    actualizarEstadoIA("Aplicando calendario sugerido...")
+                    aplicarResultadoIA(it)
+                }
+                .onFailure { error ->
+                    val mensaje = when (error) {
+                        is SocketTimeoutException -> "La solicitud tardo demasiado. Intenta con marca/modelo escritos o una foto mas clara."
+                        else -> error.message ?: "Error desconocido"
+                    }
+                    textoEstadoIA?.text = "No se pudo generar el calendario: $mensaje"
+                    Toast.makeText(this@AgregarDispositivoActivity, "No se pudo generar el calendario", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
+    private fun actualizarEstadoIA(mensaje: String) {
+        textoEstadoIA?.text = mensaje
+    }
+
+    private fun aplicarResultadoIA(resultado: AiMaintenanceResult) {
+        val dispositivo = resultado.dispositivo
+        contenedorTarjetas.findViewById<EditText>(R.id.campo_nombre)?.setText(dispositivo.nombre)
+        contenedorTarjetas.findViewById<EditText>(R.id.campo_marca)?.setText(dispositivo.marca)
+        contenedorTarjetas.findViewById<EditText>(R.id.campo_modelo)?.setText(dispositivo.modelo)
+        seleccionarSpinnerPorTexto(contenedorTarjetas.findViewById(R.id.spinner_categoria), dispositivo.categoria)
+
+        eliminarTarjetasProgramadas()
+        resultado.tareas.forEach { agregarTarjetaTareaDesdeIA(it) }
+        resultado.inspecciones.forEach { agregarTarjetaInspeccionDesdeIA(it) }
+
+        textoEstadoIA?.text = "Calendario generado. Revisa y edita antes de aceptar."
+        textoFuentesIA?.text = if (resultado.fuentes.isEmpty()) {
+            ""
+        } else {
+            "Fuentes:\n" + resultado.fuentes.joinToString("\n") { fuente ->
+                "- ${fuente.titulo.ifBlank { fuente.url }}\n  ${fuente.url}"
+            }
+        }
+    }
+
+    private fun eliminarTarjetasProgramadas() {
+        var i = contenedorTarjetas.childCount - 1
+        while (i >= 0) {
+            val vista = contenedorTarjetas.getChildAt(i)
+            val esTarea = vista.findViewById<EditText>(R.id.campo_nombre_tarea) != null
+            val esInspeccion = vista.findViewById<EditText>(R.id.campo_nombre_inspeccion) != null
+            if (esTarea || esInspeccion) {
+                contenedorTarjetas.removeViewAt(i)
+            }
+            i--
+        }
+    }
+
+    private fun agregarTarjetaTareaDesdeIA(tarea: Tarea) {
+        val vista = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
+        configurarCalendarioTarea(vista, tarea.fecha)
+        vista.findViewById<EditText>(R.id.campo_nombre_tarea)?.setText(tarea.nombre)
+        vista.findViewById<EditText>(R.id.campo_descripcion)?.setText(tarea.descripcion)
+        seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir), tarea.repetirCada)
+        contenedorTarjetas.addView(vista)
+    }
+
+    private fun agregarTarjetaInspeccionDesdeIA(inspeccion: Inspeccion) {
+        val vista = LayoutInflater.from(this).inflate(R.layout.layout_inspeccion, contenedorTarjetas, false)
+        configurarCalendarioInspeccion(vista, inspeccion.fecha)
+        vista.findViewById<EditText>(R.id.campo_nombre_inspeccion)?.setText(inspeccion.nombre)
+        vista.findViewById<EditText>(R.id.campo_descripcion_inspeccion)?.setText(inspeccion.descripcion)
+        seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir_inspeccion), inspeccion.repetirCada)
+        contenedorTarjetas.addView(vista)
+    }
+
+    private fun configurarCalendarioTarea(vista: View, fechaInicial: String?) {
+        configurarCalendarioPlegable(
+            vista,
+            R.id.texto_fecha_tarea,
+            fechaInicial
+        )
+    }
+
+    private fun configurarCalendarioInspeccion(vista: View, fechaInicial: String?) {
+        configurarCalendarioPlegable(
+            vista,
+            R.id.texto_fecha_inspeccion,
+            fechaInicial
+        )
+    }
+
+    private fun configurarCalendarioPlegable(
+        vista: View,
+        textoFechaId: Int,
+        fechaInicial: String?
+    ) {
+        val textoFecha = vista.findViewById<TextView>(textoFechaId) ?: return
+        val formato = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val fechaSeleccionada = Calendar.getInstance().apply {
+            val fechaParseada = fechaInicial?.let { runCatching { formato.parse(it) }.getOrNull() }
+            if (fechaParseada != null) {
+                time = fechaParseada
+            }
+        }
+
+        textoFecha.text = formato.format(fechaSeleccionada.time)
+
+        textoFecha.setOnClickListener {
+            DatePickerDialog(
+                this,
+                { _, year, month, dayOfMonth ->
+                    fechaSeleccionada.set(year, month, dayOfMonth)
+                    textoFecha.text = formato.format(fechaSeleccionada.time)
+                },
+                fechaSeleccionada.get(Calendar.YEAR),
+                fechaSeleccionada.get(Calendar.MONTH),
+                fechaSeleccionada.get(Calendar.DAY_OF_MONTH)
+            ).show()
+        }
+    }
+
+    private fun seleccionarSpinnerPorTexto(spinner: Spinner?, texto: String) {
+        if (spinner == null || texto.isBlank()) return
+        for (i in 0 until spinner.count) {
+            if (spinner.getItemAtPosition(i).toString().equals(texto, ignoreCase = true)) {
+                spinner.setSelection(i)
+                return
+            }
+        }
+    }
+
+    private fun leerFotoIA(): ByteArray? {
+        val uri = fotoIaUri ?: return null
+        val bytes = if (uri.scheme == "file") {
+            File(uri.path ?: return null).readBytes()
+        } else {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        }
+        return comprimirFotoIA(bytes ?: return null)
+    }
+
+    private fun comprimirFotoIA(bytes: ByteArray): ByteArray {
+        val opciones = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opciones)
+
+        opciones.inSampleSize = calcularEscalaImagen(opciones.outWidth, opciones.outHeight, 1024)
+        opciones.inJustDecodeBounds = false
+
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opciones) ?: return bytes
+        val salida = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 72, salida)
+        bitmap.recycle()
+        return salida.toByteArray()
+    }
+
+    private fun calcularEscalaImagen(ancho: Int, alto: Int, maximo: Int): Int {
+        var escala = 1
+        var anchoReducido = ancho
+        var altoReducido = alto
+        while (anchoReducido > maximo || altoReducido > maximo) {
+            escala *= 2
+            anchoReducido /= 2
+            altoReducido /= 2
+        }
+        return escala
+    }
+
+    private fun mostrarOpcionesFotoIA() {
+        val opciones = arrayOf("Camara", "Galeria")
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Foto del dispositivo")
+            .setItems(opciones) { _, which ->
+                when (which) {
+                    0 -> abrirCamaraIA()
+                    1 -> abrirGaleriaIA()
+                }
+            }
+            .show()
+    }
+
+    private fun abrirCamaraIA() {
+        val carpetaFotos = File(filesDir, "dispositivo_ia").apply { mkdirs() }
+        val archivoFoto = File(carpetaFotos, "dispositivo_${System.currentTimeMillis()}.jpg")
+        fotoIaArchivo = archivoFoto
+        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", archivoFoto)
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_OUTPUT, uri)
+        }
+        resultadoCamaraIA.launch(intent)
+    }
+
+    private fun abrirGaleriaIA() {
+        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        resultadoGaleriaIA.launch(intent)
     }
 
     private fun agregarBotonesDinamicos() {

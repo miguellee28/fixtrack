@@ -159,6 +159,7 @@ class AgregarTareaActivity : AppCompatActivity() {
         vista.findViewById<EditText>(R.id.campo_nombre_tarea)?.setText(tarea.nombre)
         vista.findViewById<EditText>(R.id.campo_descripcion)?.setText(tarea.descripcion)
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir), tarea.repetirCada)
+        vista.tag = tarea
         contadorTareas++
         contenedorTarjetas.addView(vista)
     }
@@ -176,6 +177,7 @@ class AgregarTareaActivity : AppCompatActivity() {
         vista.findViewById<EditText>(R.id.campo_nombre_inspeccion)?.setText(inspeccion.nombre)
         vista.findViewById<EditText>(R.id.campo_descripcion_inspeccion)?.setText(inspeccion.descripcion)
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir_inspeccion), inspeccion.repetirCada)
+        vista.tag = inspeccion
         contadorInspecciones++
         contenedorTarjetas.addView(vista)
     }
@@ -295,10 +297,20 @@ class AgregarTareaActivity : AppCompatActivity() {
             if (nombreCampo != null) {
                 val nombre = nombreCampo.text.toString().trim()
                 if (nombre.isNotEmpty()) {
+                    val existente = vista.tag as? Tarea
                     val desc = vista.findViewById<EditText>(R.id.campo_descripcion)?.text.toString().trim()
                     val repetir = vista.findViewById<Spinner>(R.id.spinner_repetir)?.selectedItem?.toString() ?: "Una vez"
                     val fecha = vista.findViewById<TextView>(R.id.texto_fecha_tarea)?.text.toString()
-                    tareas.add(Tarea(nombre = nombre, descripcion = desc, fecha = fecha, repetirCada = repetir))
+                    tareas.add(
+                        Tarea(
+                            id = existente?.id ?: 0,
+                            nombre = nombre,
+                            descripcion = desc,
+                            fecha = fecha,
+                            repetirCada = repetir,
+                            completada = existente?.completada ?: false
+                        )
+                    )
                 }
             }
 
@@ -306,10 +318,20 @@ class AgregarTareaActivity : AppCompatActivity() {
             if (nombreInspeccion != null) {
                 val nombre = nombreInspeccion.text.toString().trim()
                 if (nombre.isNotEmpty()) {
+                    val existente = vista.tag as? Inspeccion
                     val desc = vista.findViewById<EditText>(R.id.campo_descripcion_inspeccion)?.text.toString().trim()
                     val repetir = vista.findViewById<Spinner>(R.id.spinner_repetir_inspeccion)?.selectedItem?.toString() ?: "Una vez"
                     val fecha = vista.findViewById<TextView>(R.id.texto_fecha_inspeccion)?.text.toString()
-                    inspecciones.add(Inspeccion(nombre = nombre, descripcion = desc, fecha = fecha, repetirCada = repetir))
+                    inspecciones.add(
+                        Inspeccion(
+                            id = existente?.id ?: 0,
+                            nombre = nombre,
+                            descripcion = desc,
+                            fecha = fecha,
+                            repetirCada = repetir,
+                            completada = existente?.completada ?: false
+                        )
+                    )
                 }
             }
         }
@@ -320,7 +342,12 @@ class AgregarTareaActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            viewModel.guardarTareasEInspecciones(dispositivoId, tareas, inspecciones)
+            val hayItemsExistentes = tareas.any { it.id > 0 } || inspecciones.any { it.id > 0 }
+            if (dispositivoId != null && hayItemsExistentes) {
+                viewModel.guardarEdicionCalendario(dispositivoId, tareas, inspecciones)
+            } else {
+                viewModel.guardarTareasEInspecciones(dispositivoId, tareas, inspecciones)
+            }
             Toast.makeText(this@AgregarTareaActivity, "Guardado correctamente", Toast.LENGTH_SHORT).show()
             setResult(RESULT_OK)
             finish()

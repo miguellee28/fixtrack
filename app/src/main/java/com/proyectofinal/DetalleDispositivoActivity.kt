@@ -15,7 +15,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class DetalleDispositivoActivity : AppCompatActivity() {
 
@@ -36,14 +38,25 @@ class DetalleDispositivoActivity : AppCompatActivity() {
     private lateinit var botonCompartir: Button
     private lateinit var botonEditarCalendario: TextView
     private lateinit var contenedorCalendario: LinearLayout
+    private lateinit var textoResumenIA: TextView
 
     private var dispositivoId: Long = 0
+    private val aiService by lazy {
+        MaintenanceAiService(
+            GoogleGenAiClient(BuildConfig.GOOGLE_GENAI_API_KEY),
+            BraveSearchClient(BuildConfig.BRAVE_SEARCH_API_KEY)
+        )
+    }
 
     private val resultadoEditarCalendario = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) {
+    ) { resultado ->
         if (dispositivoId != 0L) {
             cargarCalendarioDispositivo()
+            cargarResumenIA()
+        }
+        if (resultado.resultCode == RESULT_OK) {
+            setResult(RESULT_OK)
         }
     }
 
@@ -77,6 +90,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         botonCompartir = findViewById(R.id.boton_compartir)
         botonEditarCalendario = findViewById(R.id.boton_editar_calendario)
         contenedorCalendario = findViewById(R.id.contenedor_calendario_dispositivo)
+        textoResumenIA = findViewById(R.id.texto_resumen_ia)
 
         dispositivoId = intent.getLongExtra(EXTRA_ID, 0)
         campoNombre.setText(intent.getStringExtra(EXTRA_NOMBRE_DISPOSITIVO) ?: "")
@@ -91,6 +105,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         }
 
         cargarCalendarioDispositivo()
+        cargarResumenIA()
 
         botonGuardar.setOnClickListener {
             val nombre = campoNombre.text.toString().trim()
@@ -113,6 +128,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 viewModel.actualizarDispositivo(dispositivo)
+                cargarResumenIA()
                 Toast.makeText(this@DetalleDispositivoActivity, "Dispositivo actualizado", Toast.LENGTH_SHORT).show()
                 setResult(RESULT_OK)
                 finish()
@@ -178,6 +194,44 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         items.forEach { item ->
             contenedorCalendario.addView(crearTarjetaCalendario(item))
         }
+    }
+
+    private fun cargarResumenIA() {
+        textoResumenIA.text = "Analizando inspecciones..."
+        lifecycleScope.launch {
+            val dispositivo = dispositivoActual()
+            val detalles = withContext(Dispatchers.IO) {
+                viewModel.obtenerTodasTareasPorDispositivo(dispositivoId)
+                    .flatMap { tarea -> viewModel.cargarDetallesPorTarea(tarea.id) }
+            }
+            val inspeccionesConEstado = detalles.filter {
+                it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())
+            }
+
+            if (inspeccionesConEstado.isEmpty()) {
+                textoResumenIA.text = MaintenanceAiService.generarFeedbackLocal(detalles)
+                return@launch
+            }
+
+            val feedback = runCatching {
+                withContext(Dispatchers.IO) {
+                    aiService.generateInspectionFeedback(dispositivo, detalles)
+                }
+            }.getOrElse {
+                MaintenanceAiService.generarFeedbackLocal(detalles)
+            }
+            textoResumenIA.text = feedback
+        }
+    }
+
+    private fun dispositivoActual(): Dispositivo {
+        return Dispositivo(
+            id = dispositivoId,
+            nombre = campoNombre.text.toString().trim(),
+            categoria = spinnerCategoria.selectedItem?.toString() ?: "",
+            marca = campoMarca.text.toString().trim(),
+            modelo = campoModelo.text.toString().trim()
+        )
     }
 
     private fun crearTarjetaCalendario(item: ItemCalendarioDispositivo): LinearLayout {

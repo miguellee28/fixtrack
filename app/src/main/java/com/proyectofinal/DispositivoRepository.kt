@@ -152,6 +152,40 @@ class DispositivoRepository(private val context: Context) {
         }
     }
 
+    fun sincronizarDetallesDeTarea(tarea: Tarea, inspecciones: List<Inspeccion>) {
+        sincronizarDetalleMantenimiento(tarea)
+        reemplazarDetallesInspeccion(tarea.id, inspecciones)
+    }
+
+    private fun sincronizarDetalleMantenimiento(tarea: Tarea) {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put(DatabaseHelper.COL_DETALLE_NOMBRE, tarea.nombre)
+            put(DatabaseHelper.COL_DETALLE_DESCRIPCION, tarea.descripcion)
+        }
+        val filas = db.update(
+            DatabaseHelper.TABLE_TAREA_DETALLES,
+            values,
+            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ? AND ${DatabaseHelper.COL_DETALLE_TIPO} = ?",
+            arrayOf(tarea.id.toString(), "mantenimiento")
+        )
+        if (filas == 0) {
+            insertarDetalleBaseDeTarea(tarea.id, tarea.nombre, tarea.descripcion)
+        }
+    }
+
+    private fun reemplazarDetallesInspeccion(tareaId: Long, inspecciones: List<Inspeccion>) {
+        val db = dbHelper.writableDatabase
+        db.delete(
+            DatabaseHelper.TABLE_TAREA_DETALLES,
+            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ? AND ${DatabaseHelper.COL_DETALLE_TIPO} = ?",
+            arrayOf(tareaId.toString(), "inspeccion")
+        )
+        for (inspeccion in inspecciones) {
+            insertarDetalleInspeccionParaTarea(tareaId, inspeccion)
+        }
+    }
+
     fun obtenerTareas(): List<Tarea> {
         val db = dbHelper.readableDatabase
         val lista = mutableListOf<Tarea>()
@@ -246,6 +280,28 @@ class DispositivoRepository(private val context: Context) {
             "${DatabaseHelper.COL_TAREA_ID} = ?",
             arrayOf(id.toString())
         )
+        return filas
+    }
+
+    fun actualizarTarea(tarea: Tarea): Int {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put(DatabaseHelper.COL_TAREA_NOMBRE, tarea.nombre)
+            put(DatabaseHelper.COL_TAREA_DESCRIPCION, tarea.descripcion)
+            put(DatabaseHelper.COL_TAREA_FECHA, tarea.fecha)
+            put(DatabaseHelper.COL_TAREA_REPETIR, tarea.repetirCada)
+            put(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID, tarea.dispositivoId)
+            put(DatabaseHelper.COL_TAREA_COMPLETADA, if (tarea.completada) 1 else 0)
+        }
+        val filas = db.update(
+            DatabaseHelper.TABLE_TAREAS,
+            values,
+            "${DatabaseHelper.COL_TAREA_ID} = ?",
+            arrayOf(tarea.id.toString())
+        )
+        if (filas > 0) {
+            sincronizarDetalleMantenimiento(tarea)
+        }
         return filas
     }
 
@@ -444,6 +500,24 @@ class DispositivoRepository(private val context: Context) {
         return filas
     }
 
+    fun actualizarInspeccion(inspeccion: Inspeccion): Int {
+        val db = dbHelper.writableDatabase
+        val values = ContentValues().apply {
+            put(DatabaseHelper.COL_INSPECCION_NOMBRE, inspeccion.nombre)
+            put(DatabaseHelper.COL_INSPECCION_DESCRIPCION, inspeccion.descripcion)
+            put(DatabaseHelper.COL_INSPECCION_FECHA, inspeccion.fecha)
+            put(DatabaseHelper.COL_INSPECCION_REPETIR, inspeccion.repetirCada)
+            put(DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID, inspeccion.dispositivoId)
+            put(DatabaseHelper.COL_INSPECCION_COMPLETADA, if (inspeccion.completada) 1 else 0)
+        }
+        return db.update(
+            DatabaseHelper.TABLE_INSPECCIONES,
+            values,
+            "${DatabaseHelper.COL_INSPECCION_ID} = ?",
+            arrayOf(inspeccion.id.toString())
+        )
+    }
+
     // ==================== TAREAS CON DISPOSITIVO (JOIN) ====================
 
     fun obtenerTareasConDispositivo(): List<TareaConDispositivo> {
@@ -509,8 +583,8 @@ class DispositivoRepository(private val context: Context) {
     fun obtenerTareasProximas(): List<TareaConDispositivo> {
         val hoy = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
         val cal = java.util.Calendar.getInstance()
-        cal.add(java.util.Calendar.DAY_OF_YEAR, 30)
-        val en30 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 7)
+        val en7 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
 
         val db = dbHelper.readableDatabase
         val lista = mutableListOf<TareaConDispositivo>()
@@ -518,10 +592,10 @@ class DispositivoRepository(private val context: Context) {
             SELECT t.*, COALESCE(d.${DatabaseHelper.COL_NOMBRE}, '') as nombre_dispositivo
             FROM ${DatabaseHelper.TABLE_TAREAS} t
             LEFT JOIN ${DatabaseHelper.TABLE_DISPOSITIVOS} d ON t.${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = d.${DatabaseHelper.COL_ID}
-            WHERE t.${DatabaseHelper.COL_TAREA_FECHA} >= ? AND t.${DatabaseHelper.COL_TAREA_FECHA} <= ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
+            WHERE t.${DatabaseHelper.COL_TAREA_FECHA} >= ? AND t.${DatabaseHelper.COL_TAREA_FECHA} < ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
             ORDER BY t.${DatabaseHelper.COL_TAREA_FECHA} ASC
         """
-        val cursor = db.rawQuery(query, arrayOf(hoy, en30))
+        val cursor = db.rawQuery(query, arrayOf(hoy, en7))
 
         cursor.use { c ->
             while (c.moveToNext()) {
@@ -543,8 +617,8 @@ class DispositivoRepository(private val context: Context) {
 
     fun obtenerTareasLejanas(): List<TareaConDispositivo> {
         val cal = java.util.Calendar.getInstance()
-        cal.add(java.util.Calendar.DAY_OF_YEAR, 31)
-        val en31 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 7)
+        val en7 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
 
         val db = dbHelper.readableDatabase
         val lista = mutableListOf<TareaConDispositivo>()
@@ -552,10 +626,10 @@ class DispositivoRepository(private val context: Context) {
             SELECT t.*, COALESCE(d.${DatabaseHelper.COL_NOMBRE}, '') as nombre_dispositivo
             FROM ${DatabaseHelper.TABLE_TAREAS} t
             LEFT JOIN ${DatabaseHelper.TABLE_DISPOSITIVOS} d ON t.${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = d.${DatabaseHelper.COL_ID}
-            WHERE t.${DatabaseHelper.COL_TAREA_FECHA} > ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
+            WHERE t.${DatabaseHelper.COL_TAREA_FECHA} >= ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
             ORDER BY t.${DatabaseHelper.COL_TAREA_FECHA} ASC
         """
-        val cursor = db.rawQuery(query, arrayOf(en31))
+        val cursor = db.rawQuery(query, arrayOf(en7))
 
         cursor.use { c ->
             while (c.moveToNext()) {
@@ -833,21 +907,21 @@ class DispositivoRepository(private val context: Context) {
     fun obtenerItemsProximas(): List<ItemProgramado> {
         val hoy = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
         val cal = java.util.Calendar.getInstance()
-        cal.add(java.util.Calendar.DAY_OF_YEAR, 30)
-        val en30 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 7)
+        val en7 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
         return ejecutarUnionQuery(
-            "fecha >= ? AND fecha <= ? AND completada = 0",
-            arrayOf(hoy, en30)
+            "fecha >= ? AND fecha < ? AND completada = 0",
+            arrayOf(hoy, en7)
         )
     }
 
     fun obtenerItemsLejanas(): List<ItemProgramado> {
         val cal = java.util.Calendar.getInstance()
-        cal.add(java.util.Calendar.DAY_OF_YEAR, 31)
-        val en31 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
+        cal.add(java.util.Calendar.DAY_OF_YEAR, 7)
+        val en7 = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(cal.time)
         return ejecutarUnionQuery(
-            "fecha > ? AND completada = 0",
-            arrayOf(en31)
+            "fecha >= ? AND completada = 0",
+            arrayOf(en7)
         )
     }
 

@@ -34,6 +34,7 @@ class TareaDetalleActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_TAREA_ID = "tarea_id"
+        const val EXTRA_TAREA_IDS = "tarea_ids"
         const val EXTRA_TAREA_NOMBRE = "tarea_nombre"
         const val EXTRA_DISPOSITIVO_NOMBRE = "dispositivo_nombre"
         const val EXTRA_TAREA_FECHA = "tarea_fecha"
@@ -46,6 +47,7 @@ class TareaDetalleActivity : AppCompatActivity() {
     private lateinit var botonGuardar: Button
 
     private var tareaId: Long = 0
+    private var tareaIds: List<Long> = emptyList()
     private val fotosTemporales = mutableListOf<String>()
     private val fotosSeleccionadas = mutableListOf<String>()
     private val detallesExistentes = mutableListOf<TareaDetalle>()
@@ -94,12 +96,15 @@ class TareaDetalleActivity : AppCompatActivity() {
         botonGuardar = findViewById(R.id.boton_guardar)
 
         tareaId = intent.getLongExtra(EXTRA_TAREA_ID, 0)
-        val tareaNombre = intent.getStringExtra(EXTRA_TAREA_NOMBRE) ?: ""
+        tareaIds = intent.getLongArrayExtra(EXTRA_TAREA_IDS)?.toList()
+            ?.filter { it > 0 }
+            ?.takeIf { it.isNotEmpty() }
+            ?: listOf(tareaId).filter { it > 0 }
         val dispositivoNombre = intent.getStringExtra(EXTRA_DISPOSITIVO_NOMBRE) ?: ""
         val tareaFecha = intent.getStringExtra(EXTRA_TAREA_FECHA) ?: ""
 
         findViewById<TextView>(R.id.texto_nombre_tarea).text = dispositivoNombre.ifBlank { "Sin dispositivo" }
-        findViewById<TextView>(R.id.texto_nombre_dispositivo).text = tareaNombre
+        findViewById<TextView>(R.id.texto_nombre_dispositivo).visibility = View.GONE
         findViewById<TextView>(R.id.texto_fecha).text = tareaFecha
 
         cargarDetalles()
@@ -109,11 +114,13 @@ class TareaDetalleActivity : AppCompatActivity() {
     private fun cargarDetalles() {
         lifecycleScope.launch {
             val detalles = withContext(Dispatchers.IO) {
-                viewModel.cargarDetallesPorTarea(tareaId)
+                tareaIds.flatMap { id -> viewModel.cargarDetallesPorTarea(id) }
             }
             detallesExistentes.clear()
             detallesExistentes.addAll(detalles)
             contenedorDetalles.removeAllViews()
+            contenedorFotos.removeAllViews()
+            fotosSeleccionadas.clear()
 
             for (detalle in detalles) {
                 when (detalle.tipo) {
@@ -282,7 +289,9 @@ class TareaDetalleActivity : AppCompatActivity() {
                 }
             }
 
-            viewModel.marcarTareaCompletada(tareaId)
+            for (id in tareaIds) {
+                viewModel.marcarTareaCompletada(id)
+            }
             Toast.makeText(this@TareaDetalleActivity, "Tarea completada", Toast.LENGTH_SHORT).show()
             setResult(RESULT_OK)
             finish()

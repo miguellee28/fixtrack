@@ -245,6 +245,42 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         cargarDispositivos()
     }
 
+    suspend fun guardarEdicionCalendario(
+        dispositivoId: Long,
+        tareas: List<Tarea>,
+        inspecciones: List<Inspeccion>
+    ) {
+        val tareasGuardadas = tareas.map { it.copy(dispositivoId = dispositivoId) }
+        val inspeccionesGuardadas = inspecciones.map { it.copy(dispositivoId = dispositivoId) }
+
+        withContext(Dispatchers.IO) {
+            for (inspeccion in inspeccionesGuardadas) {
+                if (inspeccion.id > 0) {
+                    repository.actualizarInspeccion(inspeccion)
+                } else {
+                    repository.insertarInspeccion(inspeccion)
+                }
+            }
+
+            for (tarea in tareasGuardadas) {
+                val tareaGuardada = if (tarea.id > 0) {
+                    repository.actualizarTarea(tarea)
+                    tarea
+                } else {
+                    tarea.copy(id = repository.insertarTarea(tarea))
+                }
+                val inspeccionesParaTarea = inspeccionesGuardadas.filter { it.fecha == tareaGuardada.fecha }
+                    .ifEmpty { if (tareasGuardadas.size == 1) inspeccionesGuardadas else emptyList() }
+                repository.sincronizarDetallesDeTarea(tareaGuardada, inspeccionesParaTarea)
+            }
+        }
+        cargarTareas()
+        cargarInspecciones()
+        cargarHomeData()
+        cargarCalendarioData()
+        cargarDispositivos()
+    }
+
     fun obtenerTodosDispositivos(): List<Dispositivo> = repository.obtenerTodos()
 
     fun obtenerTareasPorDispositivo(dispositivoId: Long): List<Tarea> {
