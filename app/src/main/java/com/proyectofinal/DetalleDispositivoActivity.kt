@@ -61,12 +61,10 @@ class DetalleDispositivoActivity : AppCompatActivity() {
     }
 
     private data class ItemCalendarioDispositivo(
-        val fecha: String,
         val tipo: String,
         val nombre: String,
         val descripcion: String,
-        val repetirCada: String,
-        val completada: Boolean
+        val repetirCada: String
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,31 +158,29 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         contenedorCalendario.removeAllViews()
         val tareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId).map {
             ItemCalendarioDispositivo(
-                fecha = it.fecha,
                 tipo = "Mantenimiento",
                 nombre = it.nombre,
                 descripcion = it.descripcion,
-                repetirCada = it.repetirCada,
-                completada = it.completada
+                repetirCada = it.repetirCada
             )
         }
         val inspecciones = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId).map {
             ItemCalendarioDispositivo(
-                fecha = it.fecha,
                 tipo = "Inspeccion",
                 nombre = it.nombre,
                 descripcion = it.descripcion,
-                repetirCada = it.repetirCada,
-                completada = it.completada
+                repetirCada = it.repetirCada
             )
         }
-        val items = (tareas + inspecciones).sortedBy { it.fecha }
+        val items = (tareas + inspecciones)
+            .distinctBy { "${it.tipo}|${it.nombre}|${it.descripcion}|${it.repetirCada}" }
+            .sortedWith(compareBy<ItemCalendarioDispositivo> { it.tipo }.thenBy { it.nombre })
 
         if (items.isEmpty()) {
             val vacio = TextView(this).apply {
                 text = "No hay mantenimientos ni inspecciones registradas"
                 textSize = 14f
-                setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                setTextColor(resources.getColor(R.color.text_secondary, theme))
                 setPadding(16, 12, 16, 12)
             }
             contenedorCalendario.addView(vacio)
@@ -247,7 +243,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
             }
 
             addView(TextView(this@DetalleDispositivoActivity).apply {
-                text = "${item.fecha} - ${item.tipo}"
+                text = item.tipo
                 textSize = 12f
                 setTextColor(resources.getColor(R.color.purple_500, theme))
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -261,13 +257,12 @@ class DetalleDispositivoActivity : AppCompatActivity() {
             addView(TextView(this@DetalleDispositivoActivity).apply {
                 text = item.descripcion.ifBlank { "Sin descripcion" }
                 textSize = 13f
-                setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                setTextColor(resources.getColor(R.color.text_secondary, theme))
             })
             addView(TextView(this@DetalleDispositivoActivity).apply {
-                val estado = if (item.completada) "Completado" else "Pendiente"
-                text = "Repite: ${item.repetirCada} - $estado"
+                text = "Repite: ${item.repetirCada}"
                 textSize = 12f
-                setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                setTextColor(resources.getColor(R.color.text_secondary, theme))
                 setPadding(0, 6, 0, 0)
             })
         }

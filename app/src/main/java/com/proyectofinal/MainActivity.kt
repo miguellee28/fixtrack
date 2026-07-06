@@ -177,7 +177,7 @@ class MainActivity : AppCompatActivity() {
                 text = "No hay tareas atrasadas"
                 textSize = 14f
                 setPadding(32, 16, 32, 16)
-                setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                setTextColor(resources.getColor(R.color.text_secondary, theme))
             }
             seccion.addView(vacio)
         } else {
@@ -201,7 +201,7 @@ class MainActivity : AppCompatActivity() {
                 text = "No hay tareas pendientes"
                 textSize = 14f
                 setPadding(32, 16, 32, 16)
-                setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                setTextColor(resources.getColor(R.color.text_secondary, theme))
             }
             seccion.addView(vacio)
         } else {
@@ -225,7 +225,7 @@ class MainActivity : AppCompatActivity() {
                 text = "No hay tareas proximas"
                 textSize = 14f
                 setPadding(32, 16, 32, 16)
-                setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                setTextColor(resources.getColor(R.color.text_secondary, theme))
             }
             seccion.addView(vacio)
         } else {

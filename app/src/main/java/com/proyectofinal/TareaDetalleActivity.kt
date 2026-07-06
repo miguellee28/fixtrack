@@ -140,7 +140,7 @@ class TareaDetalleActivity : AppCompatActivity() {
                 val textoVacio = TextView(this@TareaDetalleActivity).apply {
                     text = "No hay detalles registrados"
                     textSize = 14f
-                    setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+                    setTextColor(resources.getColor(R.color.text_secondary, theme))
                     setPadding(0, 16, 0, 16)
                 }
                 contenedorDetalles.addView(textoVacio)

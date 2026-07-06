@@ -47,7 +47,7 @@
             android:layout_marginStart="3dp"
             android:text="IA"
             android:background="@drawable/fondo_toggle_no_seleccionado"
-            android:textColor="@color/black"
+            android:textColor="@color/text_primary"
             android:textAllCaps="false"
             android:minWidth="0dp"
             android:minHeight="0dp" />

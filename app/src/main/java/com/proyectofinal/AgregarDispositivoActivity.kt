@@ -109,7 +109,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonManual.setBackgroundResource(R.drawable.fondo_toggle_seleccionado)
             botonManual.setTextColor(resources.getColor(R.color.white, theme))
             botonIA.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
-            botonIA.setTextColor(resources.getColor(R.color.black, theme))
+            botonIA.setTextColor(resources.getColor(R.color.text_primary, theme))
             modoIA = false
             fotoIaUri = null
             mostrarTarjetas()
@@ -119,7 +119,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonIA.setBackgroundResource(R.drawable.fondo_toggle_seleccionado)
             botonIA.setTextColor(resources.getColor(R.color.white, theme))
             botonManual.setBackgroundResource(R.drawable.fondo_toggle_no_seleccionado)
-            botonManual.setTextColor(resources.getColor(R.color.black, theme))
+            botonManual.setTextColor(resources.getColor(R.color.text_primary, theme))
             modoIA = true
             mostrarDetalleDispositivoParaIA()
         }
@@ -283,7 +283,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         panel.addView(TextView(this).apply {
             text = "Toca la foto del dispositivo para agregar una imagen opcional."
             textSize = 13f
-            setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+            setTextColor(resources.getColor(R.color.text_secondary, theme))
             setPadding(0, 0, 0, 10)
         })
 
@@ -297,13 +297,13 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         textoEstadoIA = TextView(this).apply {
             textSize = 13f
             setPadding(0, 10, 0, 4)
-            setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+            setTextColor(resources.getColor(R.color.text_secondary, theme))
         }
         panel.addView(textoEstadoIA)
 
         textoFuentesIA = TextView(this).apply {
             textSize = 12f
-            setTextColor(resources.getColor(android.R.color.darker_gray, theme))
+            setTextColor(resources.getColor(R.color.text_secondary, theme))
         }
         panel.addView(textoFuentesIA)
         contenedorTarjetas.addView(panel)
