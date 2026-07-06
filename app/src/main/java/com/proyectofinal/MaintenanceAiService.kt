@@ -38,27 +38,36 @@ class GoogleGenAiClient(
     fun generateJson(prompt: String, imageBytes: ByteArray? = null, mimeType: String = "image/jpeg"): String {
         require(apiKey.isNotBlank()) { "Falta GOOGLE_GENAI_API_KEY en local.properties" }
 
-        val input = JSONArray().put(JSONObject().put("type", "text").put("text", prompt))
+        val parts = JSONArray().put(JSONObject().put("text", prompt))
         if (imageBytes != null) {
-            input.put(
+            parts.put(
                 JSONObject()
-                    .put("type", "image")
-                    .put("data", Base64.encodeToString(imageBytes, Base64.NO_WRAP))
-                    .put("mime_type", mimeType)
+                    .put(
+                        "inlineData",
+                        JSONObject()
+                            .put("mimeType", mimeType)
+                            .put("data", Base64.encodeToString(imageBytes, Base64.NO_WRAP))
+                    )
             )
         }
 
         val body = JSONObject()
-            .put("model", model)
-            .put("input", input)
             .put(
-                "response_format",
+                "contents",
+                JSONArray().put(
+                    JSONObject()
+                        .put("role", "user")
+                        .put("parts", parts)
+                )
+            )
+            .put(
+                "generationConfig",
                 JSONObject()
-                    .put("type", "text")
-                    .put("mime_type", "application/json")
+                    .put("responseMimeType", "application/json")
             )
 
-        val response = postJson("https://generativelanguage.googleapis.com/v1beta/interactions", body)
+        val encodedModel = URLEncoder.encode(model, "UTF-8")
+        val response = postJson("https://generativelanguage.googleapis.com/v1beta/models/$encodedModel:generateContent", body)
         return extractOutputText(JSONObject(response))
     }
 
@@ -82,6 +91,17 @@ class GoogleGenAiClient(
 
     private fun extractOutputText(json: JSONObject): String {
         json.optString("output_text").takeIf { it.isNotBlank() }?.let { return it }
+
+        val candidates = json.optJSONArray("candidates") ?: JSONArray()
+        for (i in 0 until candidates.length()) {
+            val candidate = candidates.optJSONObject(i) ?: continue
+            val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: continue
+            for (j in 0 until parts.length()) {
+                val part = parts.optJSONObject(j) ?: continue
+                if (part.optBoolean("thought")) continue
+                part.optString("text").takeIf { it.isNotBlank() }?.let { return it }
+            }
+        }
 
         val steps = json.optJSONArray("steps") ?: JSONArray()
         for (i in 0 until steps.length()) {
