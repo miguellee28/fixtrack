@@ -1,7 +1,11 @@
 package com.proyectofinal
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.Menu
@@ -12,6 +16,7 @@ import android.widget.AdapterView
 import android.widget.BaseAdapter
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
@@ -21,12 +26,16 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -67,6 +76,12 @@ class MainActivity : AppCompatActivity() {
         recargarDatosProgramados()
     }
 
+    private val solicitudPermisoNotificaciones = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        MaintenanceNotificationScheduler.scheduleAll(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -76,6 +91,8 @@ class MainActivity : AppCompatActivity() {
         contenedorPantallas = findViewById(R.id.contenedor_pantallas)
 
         viewModel = ViewModelProvider(this, DispositivosViewModelFactory(application))[DispositivosViewModel::class.java]
+        solicitarPermisoNotificaciones()
+        MaintenanceNotificationScheduler.scheduleAll(this)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { vista, insets ->
             val barrasSistema = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -88,6 +105,14 @@ class MainActivity : AppCompatActivity() {
         observarDispositivos()
         observarHomeData()
         observarCalendarioData()
+    }
+
+    private fun solicitarPermisoNotificaciones() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val permiso = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+        if (permiso != PackageManager.PERMISSION_GRANTED) {
+            solicitudPermisoNotificaciones.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     override fun onResume() {
@@ -111,6 +136,7 @@ class MainActivity : AppCompatActivity() {
                 val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
                 if (listView != null) {
                     listView.adapter = AdaptadorDispositivos(this@MainActivity, lista)
+                    actualizarResumenDispositivosIA()
                 }
             }
         }
@@ -148,7 +174,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         lifecycleScope.launch {
-            viewModel.tareasProximas.collect { lista ->
+            viewModel.calendarioProximas.collect { lista ->
                 if (viewModel.tareaSeleccionada.value == "proximo") {
                     actualizarListaCalendario(lista)
                 }
@@ -182,7 +208,7 @@ class MainActivity : AppCompatActivity() {
             seccion.addView(vacio)
         } else {
             for (grupo in agruparPorFechaYDispositivo(items)) {
-                agregarCardGrupoInicio(seccion, grupo)
+                agregarCardGrupoInicio(seccion, grupo, atrasada = true)
             }
         }
     }
@@ -206,7 +232,7 @@ class MainActivity : AppCompatActivity() {
             seccion.addView(vacio)
         } else {
             for (grupo in agruparPorFechaYDispositivo(items)) {
-                agregarCardGrupoInicio(seccion, grupo)
+                agregarCardGrupoInicio(seccion, grupo, atrasada = false)
             }
         }
     }
@@ -215,12 +241,18 @@ class MainActivity : AppCompatActivity() {
         val seccion = contenedorPantallas.findViewById<LinearLayout>(R.id.seccion_proximo) ?: return
         seccion.removeAllViews()
 
+        val grupos = agruparPorFechaYDispositivo(items)
+        val gruposVisibles = grupos.take(5)
         val header = LayoutInflater.from(this).inflate(R.layout.section_header, seccion, false)
         header.findViewById<TextView>(R.id.texto_titulo_seccion).text = "Proximo"
-        header.findViewById<TextView>(R.id.texto_contador).text = "${items.size} items"
+        header.findViewById<TextView>(R.id.texto_contador).text = if (grupos.size > 5) {
+            "5 de ${grupos.size} tarjetas"
+        } else {
+            "${grupos.size} tarjetas"
+        }
         seccion.addView(header)
 
-        if (items.isEmpty()) {
+        if (grupos.isEmpty()) {
             val vacio = TextView(this).apply {
                 text = "No hay tareas proximas"
                 textSize = 14f
@@ -229,7 +261,7 @@ class MainActivity : AppCompatActivity() {
             }
             seccion.addView(vacio)
         } else {
-            for (grupo in agruparPorFechaYDispositivo(items)) {
+            for (grupo in gruposVisibles) {
                 agregarCardGrupoProximo(seccion, grupo)
             }
         }
@@ -239,16 +271,17 @@ class MainActivity : AppCompatActivity() {
         return items.groupBy { Pair(it.fecha, it.nombreDispositivo.ifBlank { "Sin dispositivo" }) }.values.toList()
     }
 
-    private fun agregarCardGrupoInicio(seccion: LinearLayout, grupo: List<ItemProgramado>) {
+    private fun agregarCardGrupoInicio(seccion: LinearLayout, grupo: List<ItemProgramado>, atrasada: Boolean) {
         val primero = grupo.firstOrNull() ?: return
         val dispositivo = primero.nombreDispositivo.ifBlank { "Sin dispositivo" }
         val vista = LayoutInflater.from(this).inflate(R.layout.item_tarea_inicio, seccion, false)
+        vista.setBackgroundResource(if (atrasada) R.drawable.fondo_tarjeta_atrasada else R.drawable.fondo_tarjeta)
         vista.findViewById<TextView>(R.id.texto_nombre_tarea).text = dispositivo
         vista.findViewById<TextView>(R.id.texto_descripcion_tarea).text = resumenGrupo(grupo)
         vista.findViewById<TextView>(R.id.texto_nombre_dispositivo).text = "${primero.fecha} - ${textoCantidadGrupo(grupo)}"
         vista.findViewById<Button>(R.id.boton_ver).apply {
             visibility = View.VISIBLE
-            setOnClickListener { abrirDetalleGrupo(grupo) }
+            setOnClickListener { abrirDetalleGrupo(grupo, soloLectura = false) }
         }
         seccion.addView(vista)
     }
@@ -262,23 +295,30 @@ class MainActivity : AppCompatActivity() {
         vista.findViewById<TextView>(R.id.texto_nombre_dispositivo).text = resumenGrupo(grupo)
         vista.findViewById<Button>(R.id.boton_ver).apply {
             visibility = View.VISIBLE
-            setOnClickListener { abrirDetalleGrupo(grupo) }
+            setOnClickListener { abrirDetalleGrupo(grupo, soloLectura = false) }
         }
         seccion.addView(vista)
     }
 
     private fun resumenGrupo(grupo: List<ItemProgramado>): String {
-        return grupo.joinToString(separator = "\n") { item ->
+        return itemsVisiblesGrupo(grupo).joinToString(separator = "\n") { item ->
             val tipo = if (item.tipo == "tarea") "Mantenimiento" else "Inspeccion"
             "$tipo: ${item.nombre}"
         }
     }
 
     private fun textoCantidadGrupo(grupo: List<ItemProgramado>): String {
-        return if (grupo.size == 1) "1 item" else "${grupo.size} items"
+        val cantidad = itemsVisiblesGrupo(grupo).size
+        return if (cantidad == 1) "1 item" else "$cantidad items"
     }
 
-    private fun abrirDetalleGrupo(grupo: List<ItemProgramado>) {
+    private fun itemsVisiblesGrupo(grupo: List<ItemProgramado>): List<ItemProgramado> {
+        val unicos = grupo.distinctBy { "${it.tipo}:${it.nombre.trim().lowercase()}:${it.fecha}" }
+        val tareas = unicos.filter { it.tipo == "tarea" }
+        return tareas.ifEmpty { unicos }
+    }
+
+    private fun abrirDetalleGrupo(grupo: List<ItemProgramado>, soloLectura: Boolean = false) {
         val tareas = grupo.filter { it.tipo == "tarea" }
         if (tareas.isNotEmpty()) {
             val primera = tareas.first()
@@ -288,6 +328,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_NOMBRE, primera.nombre)
                 putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
+                putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
             }
             resultadoTareaDetalle.launch(intent)
         } else {
@@ -338,6 +379,7 @@ class MainActivity : AppCompatActivity() {
                 configurarClickLista()
                 viewModel.cargarDispositivos()
                 asignarListaDispositivos()
+                actualizarResumenDispositivosIA()
                 true
             }
             ID_CALENDARIO -> {
@@ -369,6 +411,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun actualizarResumenDispositivosIA() {
+        val textoResumen = contenedorPantallas.findViewById<TextView>(R.id.texto_resumen_dispositivos_ia) ?: return
+        textoResumen.text = "Analizando dispositivos..."
+        lifecycleScope.launch {
+            val resumen = withContext(Dispatchers.IO) {
+                generarResumenGeneralDispositivos()
+            }
+            textoResumen.text = resumen
+        }
+    }
+
+    private fun generarResumenGeneralDispositivos(): String {
+        val dispositivos = viewModel.obtenerTodosDispositivos()
+        if (dispositivos.isEmpty()) {
+            return "Agrega un dispositivo para empezar a recibir resumenes del estado general."
+        }
+
+        var inspeccionesConEstado = 0
+        var malas = 0
+        var regulares = 0
+        var buenas = 0
+        val dispositivosConAlerta = mutableSetOf<String>()
+
+        for (dispositivo in dispositivos) {
+            val detalles = viewModel.obtenerTodasTareasPorDispositivo(dispositivo.id)
+                .flatMap { tarea -> viewModel.cargarDetallesPorTarea(tarea.id) }
+                .filter { it.tipo == "inspeccion" && it.condicion.isNotBlank() }
+
+            inspeccionesConEstado += detalles.size
+            malas += detalles.count { it.condicion == "malo" }
+            regulares += detalles.count { it.condicion == "regular" }
+            buenas += detalles.count { it.condicion == "bueno" }
+
+            if (detalles.any { it.condicion == "malo" || it.condicion == "regular" }) {
+                dispositivosConAlerta.add(dispositivo.nombre)
+            }
+        }
+
+        if (inspeccionesConEstado == 0) {
+            return "Tienes ${dispositivos.size} dispositivo(s). Completa inspecciones con Bueno, Regular o Malo para generar un resumen real."
+        }
+
+        return when {
+            malas > 0 -> {
+                val nombres = dispositivosConAlerta.take(2).joinToString(", ")
+                "Atencion: hay $malas inspeccion(es) en mal estado. Revisa primero ${nombres.ifBlank { "los dispositivos marcados" }}."
+            }
+            regulares > 0 -> {
+                val nombres = dispositivosConAlerta.take(2).joinToString(", ")
+                "Hay $regulares inspeccion(es) en estado regular. Vigila ${nombres.ifBlank { "esos dispositivos" }} y programa revision preventiva."
+            }
+            else -> {
+                "Todo funciona correctamente segun $buenas inspeccion(es) registradas. Mantente al dia con los mantenimientos preventivos."
+            }
+        }
+    }
+
     private fun configurarClickLista() {
         val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
         listView?.onItemClickListener = AdapterView.OnItemClickListener { _, _, posicion, _ ->
@@ -379,6 +478,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(DetalleDispositivoActivity.EXTRA_CATEGORIA, dispositivo.categoria)
                 putExtra(DetalleDispositivoActivity.EXTRA_MARCA, dispositivo.marca)
                 putExtra(DetalleDispositivoActivity.EXTRA_MODELO, dispositivo.modelo)
+                putExtra(DetalleDispositivoActivity.EXTRA_FOTO, dispositivo.foto)
             }
             resultadoDetalleDispositivo.launch(intent)
         }
@@ -420,15 +520,24 @@ class MainActivity : AppCompatActivity() {
     private fun actualizarCalendarioSegunTab(tab: String) {
         val listaCalendario = contenedorPantallas.findViewById<ListView>(R.id.lista_calendario) ?: return
         when (tab) {
-            "proximo" -> listaCalendario.adapter = AdaptadorTareasCalendario(this, viewModel.tareasProximas.value, ::abrirDetalleGrupo)
-            "atrasado" -> listaCalendario.adapter = AdaptadorTareasCalendario(this, viewModel.tareasPasadas.value, ::abrirDetalleGrupo)
-            "completado" -> listaCalendario.adapter = AdaptadorTareasCalendario(this, viewModel.tareasCompletadas.value, ::abrirDetalleGrupo)
+            "proximo" -> listaCalendario.adapter = AdaptadorTareasCalendario(this, viewModel.calendarioProximas.value) { grupo ->
+                abrirDetalleGrupo(grupo, soloLectura = false)
+            }
+            "atrasado" -> listaCalendario.adapter = AdaptadorTareasCalendario(this, viewModel.tareasPasadas.value) { grupo ->
+                abrirDetalleGrupo(grupo, soloLectura = false)
+            }
+            "completado" -> listaCalendario.adapter = AdaptadorTareasCalendario(this, viewModel.tareasCompletadas.value) { grupo ->
+                abrirDetalleGrupo(grupo, soloLectura = true)
+            }
         }
     }
 
     private fun actualizarListaCalendario(items: List<ItemProgramado>) {
         val listaCalendario = contenedorPantallas.findViewById<ListView>(R.id.lista_calendario) ?: return
-        listaCalendario.adapter = AdaptadorTareasCalendario(this, items, ::abrirDetalleGrupo)
+        val soloLectura = viewModel.tareaSeleccionada.value == "completado"
+        listaCalendario.adapter = AdaptadorTareasCalendario(this, items) { grupo ->
+            abrirDetalleGrupo(grupo, soloLectura)
+        }
     }
 
     private fun abrirDetalleItem(item: ItemProgramado) {
@@ -438,6 +547,7 @@ class MainActivity : AppCompatActivity() {
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_NOMBRE, item.nombre)
                 putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, item.nombreDispositivo)
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, item.fecha)
+                putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, viewModel.tareaSeleccionada.value == "completado")
             }
             resultadoTareaDetalle.launch(intent)
         } else {
@@ -495,8 +605,20 @@ class MainActivity : AppCompatActivity() {
 
             val dispositivo = dispositivos[posicion]
             vista.findViewById<TextView>(R.id.texto_nombre).text = dispositivo.nombre
-            vista.findViewById<TextView>(R.id.texto_marca).text = dispositivo.marca
-            vista.findViewById<TextView>(R.id.texto_modelo).text = dispositivo.modelo
+            vista.findViewById<TextView>(R.id.texto_categoria).text = dispositivo.categoria
+            vista.findViewById<TextView>(R.id.texto_marca).text = "Marca: ${dispositivo.marca.ifBlank { "Sin marca" }}"
+            vista.findViewById<TextView>(R.id.texto_modelo).text = "Modelo: ${dispositivo.modelo.ifBlank { "Sin modelo" }}"
+
+            val imagen = vista.findViewById<ImageView>(R.id.imagen_dispositivo)
+            val placeholder = vista.findViewById<View>(R.id.texto_foto_placeholder)
+            if (dispositivo.foto.isBlank()) {
+                imagen.setImageDrawable(null)
+                placeholder.visibility = View.VISIBLE
+            } else {
+                val uri = if (dispositivo.foto.startsWith("content:")) Uri.parse(dispositivo.foto) else Uri.fromFile(File(dispositivo.foto))
+                imagen.setImageURI(uri)
+                placeholder.visibility = View.GONE
+            }
 
             return vista
         }
@@ -536,14 +658,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         private fun resumenGrupoCalendario(grupo: List<ItemProgramado>): String {
-            return grupo.joinToString(separator = "\n") { item ->
+            return itemsVisiblesGrupoCalendario(grupo).joinToString(separator = "\n") { item ->
                 val tipo = if (item.tipo == "tarea") "Mantenimiento" else "Inspeccion"
                 "$tipo: ${item.nombre}"
             }
         }
 
         private fun textoCantidadGrupoCalendario(grupo: List<ItemProgramado>): String {
-            return if (grupo.size == 1) "1 item" else "${grupo.size} items"
+            val cantidad = itemsVisiblesGrupoCalendario(grupo).size
+            return if (cantidad == 1) "1 item" else "$cantidad items"
+        }
+
+        private fun itemsVisiblesGrupoCalendario(grupo: List<ItemProgramado>): List<ItemProgramado> {
+            val unicos = grupo.distinctBy { "${it.tipo}:${it.nombre.trim().lowercase()}:${it.fecha}" }
+            val tareas = unicos.filter { it.tipo == "tarea" }
+            return tareas.ifEmpty { unicos }
         }
     }
 }

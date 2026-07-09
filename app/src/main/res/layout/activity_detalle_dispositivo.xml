@@ -24,24 +24,25 @@
             android:layout_marginBottom="16dp" />
 
         <FrameLayout
-            android:layout_width="80dp"
-            android:layout_height="80dp"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
             android:layout_gravity="center"
+            android:background="@drawable/fondo_foto_redondeada"
             android:layout_marginBottom="8dp">
 
             <ImageView
                 android:id="@+id/foto_dispositivo"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@drawable/fondo_foto_redondeada"
                 android:scaleType="centerCrop" />
 
             <TextView
+                android:id="@+id/texto_foto_placeholder"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:text="Foto"
-                android:textColor="#757575"
+                android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
         </FrameLayout>
@@ -199,7 +200,7 @@
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:text="Editar"
-                android:textColor="#6750A4"
+                android:textColor="@color/purple_500"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -225,6 +226,16 @@
             android:layout_height="wrap_content"
             android:text="Compartir"
             android:textAllCaps="false"
+            android:layout_marginTop="8dp" />
+
+        <Button
+            android:id="@+id/boton_eliminar_dispositivo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Eliminar dispositivo"
+            android:textAllCaps="false"
+            android:backgroundTint="@color/red_bad"
+            android:textColor="@color/white"
             android:layout_marginTop="8dp" />
 
     </LinearLayout>

@@ -32,11 +32,20 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
     private val _tareasLejanas = MutableStateFlow<List<ItemProgramado>>(emptyList())
     val tareasLejanas: StateFlow<List<ItemProgramado>> = _tareasLejanas.asStateFlow()
 
+    private val _calendarioProximas = MutableStateFlow<List<ItemProgramado>>(emptyList())
+    val calendarioProximas: StateFlow<List<ItemProgramado>> = _calendarioProximas.asStateFlow()
+
     private val _tareasCompletadas = MutableStateFlow<List<ItemProgramado>>(emptyList())
     val tareasCompletadas: StateFlow<List<ItemProgramado>> = _tareasCompletadas.asStateFlow()
 
     private val _tareaSeleccionada = MutableStateFlow("proximo")
     val tareaSeleccionada: StateFlow<String> = _tareaSeleccionada.asStateFlow()
+
+    private suspend fun reprogramarNotificaciones() {
+        withContext(Dispatchers.IO) {
+            MaintenanceNotificationScheduler.scheduleAll(getApplication())
+        }
+    }
 
     fun cargarDispositivos() {
         viewModelScope.launch {
@@ -68,7 +77,10 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.eliminar(id)
             }
+            reprogramarNotificaciones()
             cargarDispositivos()
+            cargarHomeData()
+            cargarCalendarioData()
         }
     }
 
@@ -87,6 +99,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) {
             repository.insertarTarea(tarea)
         }
+        reprogramarNotificaciones()
         cargarTareas()
     }
 
@@ -95,6 +108,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.eliminarTarea(id)
             }
+            reprogramarNotificaciones()
             cargarTareas()
         }
     }
@@ -103,6 +117,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) {
             repository.marcarTareaCompletada(id)
         }
+        reprogramarNotificaciones()
         cargarHomeData()
         cargarCalendarioData()
     }
@@ -122,6 +137,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) {
             repository.insertarInspeccion(inspeccion)
         }
+        reprogramarNotificaciones()
         cargarInspecciones()
     }
 
@@ -130,6 +146,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
             withContext(Dispatchers.IO) {
                 repository.eliminarInspeccion(id)
             }
+            reprogramarNotificaciones()
             cargarInspecciones()
         }
     }
@@ -158,8 +175,12 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             when (_tareaSeleccionada.value) {
                 "proximo" -> {
-                    val datos = withContext(Dispatchers.IO) { repository.obtenerItemsProximas() }
-                    _tareasProximas.value = datos
+                    val datos = withContext(Dispatchers.IO) {
+                        (repository.obtenerItemsProximas() + repository.obtenerItemsLejanas())
+                            .distinctBy { "${it.tipo}:${it.id}" }
+                            .sortedBy { it.fecha }
+                    }
+                    _calendarioProximas.value = datos
                 }
                 "atrasado" -> {
                     val datos = withContext(Dispatchers.IO) { repository.obtenerItemsPasadas() }
@@ -213,6 +234,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
                 repository.insertarInspeccion(inspeccion.copy(dispositivoId = id))
             }
         }
+        reprogramarNotificaciones()
         cargarDispositivos()
         return id
     }
@@ -238,6 +260,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
                 repository.vincularInspeccionesATarea(tareaId, inspeccionesParaTarea)
             }
         }
+        reprogramarNotificaciones()
         cargarTareas()
         cargarInspecciones()
         cargarHomeData()
@@ -274,6 +297,7 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
                 repository.sincronizarDetallesDeTarea(tareaGuardada, inspeccionesParaTarea)
             }
         }
+        reprogramarNotificaciones()
         cargarTareas()
         cargarInspecciones()
         cargarHomeData()

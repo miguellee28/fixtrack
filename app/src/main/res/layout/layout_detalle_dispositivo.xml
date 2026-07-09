@@ -18,27 +18,53 @@
         android:textStyle="bold"
         android:layout_marginBottom="8dp" />
 
-    <!-- Foto del dispositivo -->
     <FrameLayout
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:layout_gravity="center"
-        android:layout_marginBottom="8dp">
+        android:layout_width="match_parent"
+        android:layout_height="116dp"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/fondo_agregar_foto_area"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground"
+        android:padding="10dp">
 
         <ImageView
             android:id="@+id/foto_dispositivo"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@drawable/fondo_foto_redondeada"
             android:scaleType="centerCrop" />
 
-        <TextView
+        <LinearLayout
+            android:id="@+id/texto_foto_placeholder"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="Foto"
-            android:textColor="#757575"
-            android:textSize="12sp" />
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginBottom="6dp"
+                android:contentDescription="Agregar foto"
+                android:src="@drawable/ic_agregar_foto" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Agregar foto del dispositivo"
+                android:textColor="@color/purple_500"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Toca para camara o galeria"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
 
     </FrameLayout>
 

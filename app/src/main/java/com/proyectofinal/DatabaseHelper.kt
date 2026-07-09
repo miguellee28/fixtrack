@@ -8,7 +8,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
 
     companion object {
         const val DATABASE_NAME = "proyecto_final.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3
 
         // Tabla Dispositivos
         const val TABLE_DISPOSITIVOS = "dispositivos"
@@ -17,6 +17,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         const val COL_CATEGORIA = "categoria"
         const val COL_MARCA = "marca"
         const val COL_MODELO = "modelo"
+        const val COL_FOTO = "foto"
 
         // Tabla Tareas
         const val TABLE_TAREAS = "tareas"
@@ -59,7 +60,8 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
                 $COL_NOMBRE TEXT NOT NULL,
                 $COL_CATEGORIA TEXT NOT NULL,
                 $COL_MARCA TEXT NOT NULL,
-                $COL_MODELO TEXT NOT NULL
+                $COL_MODELO TEXT NOT NULL,
+                $COL_FOTO TEXT DEFAULT ''
             )
         """)
 
@@ -125,6 +127,9 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
                     FOREIGN KEY ($COL_DETALLE_TAREA_ID) REFERENCES $TABLE_TAREAS($COL_TAREA_ID)
                 )
             """)
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE $TABLE_DISPOSITIVOS ADD COLUMN $COL_FOTO TEXT DEFAULT ''")
         }
     }
 }

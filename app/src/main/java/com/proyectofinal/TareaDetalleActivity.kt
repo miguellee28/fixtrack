@@ -38,6 +38,7 @@ class TareaDetalleActivity : AppCompatActivity() {
         const val EXTRA_TAREA_NOMBRE = "tarea_nombre"
         const val EXTRA_DISPOSITIVO_NOMBRE = "dispositivo_nombre"
         const val EXTRA_TAREA_FECHA = "tarea_fecha"
+        const val EXTRA_SOLO_LECTURA = "solo_lectura"
     }
 
     private lateinit var viewModel: DispositivosViewModel
@@ -51,6 +52,7 @@ class TareaDetalleActivity : AppCompatActivity() {
     private val fotosTemporales = mutableListOf<String>()
     private val fotosSeleccionadas = mutableListOf<String>()
     private val detallesExistentes = mutableListOf<TareaDetalle>()
+    private var soloLectura: Boolean = false
 
     private val resultadoCamara = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -100,6 +102,7 @@ class TareaDetalleActivity : AppCompatActivity() {
             ?.filter { it > 0 }
             ?.takeIf { it.isNotEmpty() }
             ?: listOf(tareaId).filter { it > 0 }
+        soloLectura = intent.getBooleanExtra(EXTRA_SOLO_LECTURA, false)
         val dispositivoNombre = intent.getStringExtra(EXTRA_DISPOSITIVO_NOMBRE) ?: ""
         val tareaFecha = intent.getStringExtra(EXTRA_TAREA_FECHA) ?: ""
 
@@ -168,7 +171,11 @@ class TareaDetalleActivity : AppCompatActivity() {
         val vista = LayoutInflater.from(this).inflate(R.layout.item_tarea_mantenimiento, contenedorDetalles, false)
         vista.findViewById<TextView>(R.id.texto_nombre_mantenimiento).text = detalle.nombre
         vista.findViewById<TextView>(R.id.texto_descripcion_mantenimiento).text = detalle.descripcion
-        vista.findViewById<EditText>(R.id.campo_notas_mantenimiento).setText(detalle.notas)
+        vista.findViewById<EditText>(R.id.campo_notas_mantenimiento).apply {
+            setText(detalle.notas)
+            if (soloLectura) hint = ""
+            isEnabled = !soloLectura
+        }
         vista.tag = detalle.id
         contenedorDetalles.addView(vista)
     }
@@ -177,7 +184,11 @@ class TareaDetalleActivity : AppCompatActivity() {
         val vista = LayoutInflater.from(this).inflate(R.layout.item_inspeccion_detalle, contenedorDetalles, false)
         vista.findViewById<TextView>(R.id.texto_nombre_inspeccion).text = detalle.nombre
         vista.findViewById<TextView>(R.id.texto_descripcion_inspeccion).text = detalle.descripcion
-        vista.findViewById<EditText>(R.id.campo_notas_inspeccion).setText(detalle.notas)
+        vista.findViewById<EditText>(R.id.campo_notas_inspeccion).apply {
+            setText(detalle.notas)
+            if (soloLectura) hint = ""
+            isEnabled = !soloLectura
+        }
 
         val botonBueno = vista.findViewById<Button>(R.id.boton_bueno)
         val botonRegular = vista.findViewById<Button>(R.id.boton_regular)
@@ -193,9 +204,15 @@ class TareaDetalleActivity : AppCompatActivity() {
             "malo" -> seleccionarCondicion(botonMalo, botonBueno, botonRegular)
         }
 
-        botonBueno.setOnClickListener { seleccionarCondicion(botonBueno, botonRegular, botonMalo) }
-        botonRegular.setOnClickListener { seleccionarCondicion(botonRegular, botonBueno, botonMalo) }
-        botonMalo.setOnClickListener { seleccionarCondicion(botonMalo, botonBueno, botonRegular) }
+        if (soloLectura) {
+            botonBueno.isEnabled = false
+            botonRegular.isEnabled = false
+            botonMalo.isEnabled = false
+        } else {
+            botonBueno.setOnClickListener { seleccionarCondicion(botonBueno, botonRegular, botonMalo) }
+            botonRegular.setOnClickListener { seleccionarCondicion(botonRegular, botonBueno, botonMalo) }
+            botonMalo.setOnClickListener { seleccionarCondicion(botonMalo, botonBueno, botonRegular) }
+        }
 
         vista.tag = detalle.id
         contenedorDetalles.addView(vista)
@@ -208,6 +225,16 @@ class TareaDetalleActivity : AppCompatActivity() {
     }
 
     private fun configurarBotones() {
+        if (soloLectura) {
+            botonAgregarFoto.visibility = View.GONE
+            botonGuardar.text = "Cerrar"
+            botonGuardar.setOnClickListener {
+                setResult(RESULT_OK)
+                finish()
+            }
+            return
+        }
+
         botonAgregarFoto.setOnClickListener {
             mostrarOpcionesFoto()
         }
@@ -268,10 +295,14 @@ class TareaDetalleActivity : AppCompatActivity() {
             imagen.setImageResource(android.R.drawable.ic_menu_gallery)
         }
 
-        botonEliminar.setOnClickListener {
-            contenedorFotos.removeView(vista)
-            fotosTemporales.remove(ruta)
-            fotosSeleccionadas.remove(ruta)
+        if (soloLectura) {
+            botonEliminar.visibility = View.GONE
+        } else {
+            botonEliminar.setOnClickListener {
+                contenedorFotos.removeView(vista)
+                fotosTemporales.remove(ruta)
+                fotosSeleccionadas.remove(ruta)
+            }
         }
 
         contenedorFotos.addView(vista)

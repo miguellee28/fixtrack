@@ -60,11 +60,12 @@ class GoogleGenAiClient(
                         .put("parts", parts)
                 )
             )
-            .put(
+        if (imageBytes == null) {
+            body.put(
                 "generationConfig",
-                JSONObject()
-                    .put("responseMimeType", "application/json")
+                JSONObject().put("response_mime_type", "application/json")
             )
+        }
 
         val encodedModel = URLEncoder.encode(model, "UTF-8")
         val response = postJson("https://generativelanguage.googleapis.com/v1beta/models/$encodedModel:generateContent", body)
@@ -72,21 +73,34 @@ class GoogleGenAiClient(
     }
 
     private fun postJson(urlText: String, body: JSONObject): String {
-        val connection = (URL(urlText).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 45000
-            readTimeout = 120000
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("x-goog-api-key", apiKey)
+        var lastError: String? = null
+        var lastCode = 0
+
+        repeat(3) { attempt ->
+            val connection = (URL(urlText).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = 45000
+                readTimeout = 120000
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("x-goog-api-key", apiKey)
+            }
+
+            OutputStreamWriter(connection.outputStream).use { it.write(body.toString()) }
+            val responseText = readResponse(connection)
+            if (connection.responseCode in 200..299) {
+                return responseText
+            }
+
+            lastCode = connection.responseCode
+            lastError = responseText
+            if (connection.responseCode !in setOf(429, 500, 503) || attempt == 2) {
+                throw IllegalStateException("Gemma respondio con error ${connection.responseCode}: $responseText")
+            }
+            Thread.sleep(1200L * (attempt + 1))
         }
 
-        OutputStreamWriter(connection.outputStream).use { it.write(body.toString()) }
-        val responseText = readResponse(connection)
-        if (connection.responseCode !in 200..299) {
-            throw IllegalStateException("Gemma respondio con error ${connection.responseCode}: $responseText")
-        }
-        return responseText
+        throw IllegalStateException("Gemma respondio con error $lastCode: ${lastError.orEmpty()}")
     }
 
     private fun extractOutputText(json: JSONObject): String {
@@ -214,8 +228,12 @@ class MaintenanceAiService(
     ): AiMaintenanceResult {
         onProgress("Identificando el dispositivo...")
         val identified = identifyDevice(nombre, categoria, marca, modelo, imageBytes)
-        val queryBase = listOf(identified.marca, identified.modelo).filter { it.isNotBlank() }.joinToString(" ").ifBlank {
-            listOf(identified.nombre, identified.categoria).filter { it.isNotBlank() }.joinToString(" ")
+        val queryBase = when {
+            identified.marca.isNotBlank() && identified.modelo.isNotBlank() -> "${identified.marca} ${identified.modelo}"
+            identified.marca.isNotBlank() -> listOf(identified.marca, identified.nombre, identified.categoria)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+            else -> listOf(identified.nombre, identified.categoria).filter { it.isNotBlank() }.joinToString(" ")
         }
         if (queryBase.isBlank()) {
             throw IllegalArgumentException("Agrega una foto o escribe marca/modelo para buscar mantenimiento")
@@ -250,6 +268,15 @@ class MaintenanceAiService(
             return Dispositivo(nombre = nombre.ifBlank { "$marca $modelo" }, categoria = categoria, marca = marca, modelo = modelo)
         }
 
+        val descripcionImagen = if (imageBytes != null) {
+            genAiClient.generateJson(
+                "Identify the device or product in this image. Answer briefly with likely brand and model if possible.",
+                imageBytes
+            )
+        } else {
+            ""
+        }
+
         val prompt = """
             Identifica el dispositivo con la informacion disponible.
             Campos escritos por el usuario:
@@ -257,6 +284,7 @@ class MaintenanceAiService(
             categoria=$categoria
             marca=$marca
             modelo=$modelo
+            descripcionImagen=$descripcionImagen
 
             Devuelve solo JSON valido con esta forma exacta:
             {
@@ -268,7 +296,7 @@ class MaintenanceAiService(
             Si no puedes identificar algo, usa el valor escrito por el usuario o una cadena vacia.
         """.trimIndent()
 
-        val json = parseJsonObject(genAiClient.generateJson(prompt, imageBytes))
+        val json = parseJsonObject(genAiClient.generateJson(prompt))
         val detectedMarca = json.optString("marca").ifBlank { marca }
         val detectedModelo = json.optString("modelo").ifBlank { modelo }
         return Dispositivo(
@@ -443,7 +471,32 @@ class MaintenanceAiService(
             .removePrefix("```")
             .removeSuffix("```")
             .trim()
-        return JSONObject(trimmed)
+        return JSONObject(extraerObjetoJson(trimmed))
+    }
+
+    private fun extraerObjetoJson(text: String): String {
+        val start = text.indexOf('{')
+        if (start < 0) return text
+
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in start until text.length) {
+            val char = text[i]
+            when {
+                escaped -> escaped = false
+                char == '\\' && inString -> escaped = true
+                char == '"' -> inString = !inString
+                !inString && char == '{' -> depth++
+                !inString && char == '}' -> {
+                    depth--
+                    if (depth == 0) {
+                        return text.substring(start, i + 1)
+                    }
+                }
+            }
+        }
+        return text
     }
 
     companion object {

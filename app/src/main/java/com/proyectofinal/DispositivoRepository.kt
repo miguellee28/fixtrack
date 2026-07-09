@@ -19,6 +19,7 @@ class DispositivoRepository(private val context: Context) {
             put(DatabaseHelper.COL_CATEGORIA, dispositivo.categoria)
             put(DatabaseHelper.COL_MARCA, dispositivo.marca)
             put(DatabaseHelper.COL_MODELO, dispositivo.modelo)
+            put(DatabaseHelper.COL_FOTO, dispositivo.foto)
         }
         val id = db.insert(DatabaseHelper.TABLE_DISPOSITIVOS, null, values)
         return id
@@ -41,7 +42,8 @@ class DispositivoRepository(private val context: Context) {
                         nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_NOMBRE)),
                         categoria = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_CATEGORIA)),
                         marca = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MARCA)),
-                        modelo = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MODELO))
+                        modelo = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MODELO)),
+                        foto = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_FOTO)) ?: ""
                     )
                 )
             }
@@ -56,6 +58,7 @@ class DispositivoRepository(private val context: Context) {
             put(DatabaseHelper.COL_CATEGORIA, dispositivo.categoria)
             put(DatabaseHelper.COL_MARCA, dispositivo.marca)
             put(DatabaseHelper.COL_MODELO, dispositivo.modelo)
+            put(DatabaseHelper.COL_FOTO, dispositivo.foto)
         }
         val filas = db.update(
             DatabaseHelper.TABLE_DISPOSITIVOS,
@@ -68,6 +71,21 @@ class DispositivoRepository(private val context: Context) {
 
     fun eliminar(id: Long): Int {
         val db = dbHelper.writableDatabase
+        db.delete(
+            DatabaseHelper.TABLE_TAREA_DETALLES,
+            "${DatabaseHelper.COL_DETALLE_TAREA_ID} IN (SELECT ${DatabaseHelper.COL_TAREA_ID} FROM ${DatabaseHelper.TABLE_TAREAS} WHERE ${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?)",
+            arrayOf(id.toString())
+        )
+        db.delete(
+            DatabaseHelper.TABLE_TAREAS,
+            "${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?",
+            arrayOf(id.toString())
+        )
+        db.delete(
+            DatabaseHelper.TABLE_INSPECCIONES,
+            "${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ?",
+            arrayOf(id.toString())
+        )
         val filas = db.delete(
             DatabaseHelper.TABLE_DISPOSITIVOS,
             "${DatabaseHelper.COL_ID} = ?",
@@ -893,7 +911,7 @@ class DispositivoRepository(private val context: Context) {
                 )
             }
         }
-        return lista
+        return lista.distinctBy { "${it.tipo}:${it.id}" }
     }
 
     fun obtenerItemsPasadas(): List<ItemProgramado> {

@@ -21,7 +21,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#CCCCCC" />
+        android:background="@color/divider_color" />
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -36,6 +36,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/texto_titulo_resumen_dispositivos_ia"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="8dp"
@@ -44,9 +45,11 @@
                 android:textStyle="bold" />
 
             <TextView
-                android:layout_width="wrap_content"
+                android:id="@+id/texto_resumen_dispositivos_ia"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Todo funciona de manera óptima"
+                android:text="Analizando dispositivos..."
+                android:textColor="@color/text_secondary"
                 android:textSize="14sp" />
 
         </LinearLayout>

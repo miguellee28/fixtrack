@@ -20,6 +20,7 @@
     <color name="color_tarjeta_dispositivo">#EEF7FF</color>
     <color name="color_tarjeta_tarea">#F1F8E9</color>
     <color name="color_tarjeta_inspeccion">#FFF3E0</color>
+    <color name="color_tarjeta_atrasada">#FDEAEA</color>
     <color name="purple_500">#6750A4</color>
     <color name="green_good">#4CAF50</color>
     <color name="orange_regular">#FF9800</color>

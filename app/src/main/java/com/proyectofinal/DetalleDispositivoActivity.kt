@@ -1,15 +1,18 @@
 package com.proyectofinal
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -18,6 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class DetalleDispositivoActivity : AppCompatActivity() {
 
@@ -27,6 +31,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         const val EXTRA_CATEGORIA = "categoria"
         const val EXTRA_MARCA = "marca"
         const val EXTRA_MODELO = "modelo"
+        const val EXTRA_FOTO = "foto"
     }
 
     private lateinit var viewModel: DispositivosViewModel
@@ -36,11 +41,14 @@ class DetalleDispositivoActivity : AppCompatActivity() {
     private lateinit var spinnerCategoria: Spinner
     private lateinit var botonGuardar: Button
     private lateinit var botonCompartir: Button
+    private lateinit var botonEliminar: Button
     private lateinit var botonEditarCalendario: TextView
     private lateinit var contenedorCalendario: LinearLayout
     private lateinit var textoResumenIA: TextView
+    private lateinit var imagenDispositivo: ImageView
 
     private var dispositivoId: Long = 0
+    private var fotoDispositivo: String = ""
     private val aiService by lazy {
         MaintenanceAiService(
             GoogleGenAiClient(BuildConfig.GOOGLE_GENAI_API_KEY),
@@ -86,14 +94,18 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         spinnerCategoria = findViewById(R.id.spinner_categoria)
         botonGuardar = findViewById(R.id.boton_guardar)
         botonCompartir = findViewById(R.id.boton_compartir)
+        botonEliminar = findViewById(R.id.boton_eliminar_dispositivo)
         botonEditarCalendario = findViewById(R.id.boton_editar_calendario)
         contenedorCalendario = findViewById(R.id.contenedor_calendario_dispositivo)
         textoResumenIA = findViewById(R.id.texto_resumen_ia)
+        imagenDispositivo = findViewById(R.id.foto_dispositivo)
 
         dispositivoId = intent.getLongExtra(EXTRA_ID, 0)
+        fotoDispositivo = intent.getStringExtra(EXTRA_FOTO) ?: ""
         campoNombre.setText(intent.getStringExtra(EXTRA_NOMBRE_DISPOSITIVO) ?: "")
         campoMarca.setText(intent.getStringExtra(EXTRA_MARCA) ?: "")
         campoModelo.setText(intent.getStringExtra(EXTRA_MODELO) ?: "")
+        mostrarFotoDispositivo()
 
         val categoria = intent.getStringExtra(EXTRA_CATEGORIA) ?: ""
         val categorias = resources.getStringArray(R.array.opciones_categoria)
@@ -121,7 +133,8 @@ class DetalleDispositivoActivity : AppCompatActivity() {
                 nombre = nombre,
                 categoria = categoriaSel,
                 marca = marca,
-                modelo = modelo
+                modelo = modelo,
+                foto = fotoDispositivo
             )
 
             lifecycleScope.launch {
@@ -152,6 +165,27 @@ class DetalleDispositivoActivity : AppCompatActivity() {
             }
             resultadoEditarCalendario.launch(intent)
         }
+
+        botonEliminar.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Eliminar dispositivo")
+                .setMessage("Se eliminara este dispositivo junto con su calendario, mantenimientos e inspecciones. Esta accion no se puede deshacer.")
+                .setPositiveButton("Eliminar") { _, _ ->
+                    viewModel.eliminarDispositivo(dispositivoId)
+                    Toast.makeText(this, "Dispositivo eliminado", Toast.LENGTH_SHORT).show()
+                    setResult(RESULT_OK)
+                    finish()
+                }
+                .setNegativeButton("Cancelar", null)
+                .show()
+        }
+    }
+
+    private fun mostrarFotoDispositivo() {
+        if (fotoDispositivo.isBlank()) return
+        val uri = if (fotoDispositivo.startsWith("content:")) Uri.parse(fotoDispositivo) else Uri.fromFile(File(fotoDispositivo))
+        imagenDispositivo.setImageURI(uri)
+        findViewById<TextView>(R.id.texto_foto_placeholder)?.visibility = android.view.View.GONE
     }
 
     private fun cargarCalendarioDispositivo() {
@@ -226,7 +260,8 @@ class DetalleDispositivoActivity : AppCompatActivity() {
             nombre = campoNombre.text.toString().trim(),
             categoria = spinnerCategoria.selectedItem?.toString() ?: "",
             marca = campoMarca.text.toString().trim(),
-            modelo = campoModelo.text.toString().trim()
+            modelo = campoModelo.text.toString().trim(),
+            foto = fotoDispositivo
         )
     }
 

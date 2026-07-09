@@ -63,8 +63,9 @@ class AgregarDispositivoActivity : AppCompatActivity() {
     ) { resultado ->
         if (resultado.resultCode == RESULT_OK) {
             resultado.data?.data?.let { uri ->
-                fotoIaUri = uri
-                imagenDispositivoIA?.setImageURI(uri)
+                fotoIaUri = guardarFotoDispositivo(uri) ?: uri
+                imagenDispositivoIA?.setImageURI(fotoIaUri)
+                contenedorTarjetas.findViewById<View>(R.id.texto_foto_placeholder)?.visibility = View.GONE
             }
         }
     }
@@ -76,6 +77,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             fotoIaArchivo?.takeIf { it.exists() }?.let { archivo ->
                 fotoIaUri = Uri.fromFile(archivo)
                 imagenDispositivoIA?.setImageURI(fotoIaUri)
+                contenedorTarjetas.findViewById<View>(R.id.texto_foto_placeholder)?.visibility = View.GONE
             }
         }
     }
@@ -137,7 +139,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            val dispositivo = Dispositivo(nombre = nombre, categoria = categoria, marca = marca, modelo = modelo)
+            val dispositivo = Dispositivo(nombre = nombre, categoria = categoria, marca = marca, modelo = modelo, foto = rutaFotoDispositivo())
             val tareas = construirTareas()
             val inspecciones = construirInspecciones()
 
@@ -233,6 +235,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
     private fun mostrarTarjetas() {
         contenedorTarjetas.removeAllViews()
         LayoutInflater.from(this).inflate(R.layout.layout_detalle_dispositivo, contenedorTarjetas, true)
+        configurarFotoDispositivoIA()
 
         val tarea = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
         configurarCalendarioTarea(tarea)
@@ -320,6 +323,27 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             return
         }
 
+        if (fotoIaUri != null && marca.isBlank() && modelo.isBlank()) {
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Buscar solo con imagen")
+                .setMessage("La identificacion usando solo una foto puede ser imprecisa. Para mejores resultados escribe al menos la marca o el modelo.")
+                .setPositiveButton("Continuar con imagen") { _, _ -> ejecutarBusquedaMantenimientoConIA(nombre, categoria, marca, modelo) }
+                .setNegativeButton("Llenar marca/modelo") { _, _ ->
+                    contenedorTarjetas.findViewById<EditText>(R.id.campo_marca)?.requestFocus()
+                }
+                .show()
+            return
+        }
+
+        ejecutarBusquedaMantenimientoConIA(nombre, categoria, marca, modelo)
+    }
+
+    private fun ejecutarBusquedaMantenimientoConIA(
+        nombre: String,
+        categoria: String,
+        marca: String,
+        modelo: String
+    ) {
         botonBuscarIA?.isEnabled = false
         textoEstadoIA?.text = "Buscando fuentes y generando calendario..."
         textoFuentesIA?.text = ""
@@ -472,6 +496,22 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             contentResolver.openInputStream(uri)?.use { it.readBytes() }
         }
         return comprimirFotoIA(bytes ?: return null)
+    }
+
+    private fun rutaFotoDispositivo(): String {
+        val uri = fotoIaUri ?: return ""
+        return if (uri.scheme == "file") uri.path.orEmpty() else uri.toString()
+    }
+
+    private fun guardarFotoDispositivo(uri: Uri): Uri? {
+        return runCatching {
+            val carpetaFotos = File(filesDir, "dispositivo_fotos").apply { mkdirs() }
+            val archivoFoto = File(carpetaFotos, "dispositivo_${System.currentTimeMillis()}.jpg")
+            contentResolver.openInputStream(uri)?.use { entrada ->
+                archivoFoto.outputStream().use { salida -> entrada.copyTo(salida) }
+            } ?: return null
+            Uri.fromFile(archivoFoto)
+        }.getOrNull()
     }
 
     private fun comprimirFotoIA(bytes: ByteArray): ByteArray {
