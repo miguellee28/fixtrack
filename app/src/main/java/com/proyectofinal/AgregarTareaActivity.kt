@@ -151,6 +151,7 @@ class AgregarTareaActivity : AppCompatActivity() {
     private fun agregarTarjetaTarea() {
         val vista = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
         configurarCalendarioTarea(vista)
+        configurarBotonEliminar(vista)
         contadorTareas++
         contenedorTarjetas.addView(vista)
     }
@@ -162,6 +163,7 @@ class AgregarTareaActivity : AppCompatActivity() {
         vista.findViewById<EditText>(R.id.campo_descripcion)?.setText(tarea.descripcion)
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir), tarea.repetirCada)
         vista.tag = tarea
+        configurarBotonEliminar(vista)
         contadorTareas++
         contenedorTarjetas.addView(vista)
     }
@@ -169,6 +171,7 @@ class AgregarTareaActivity : AppCompatActivity() {
     private fun agregarTarjetaInspeccion() {
         val vista = LayoutInflater.from(this).inflate(R.layout.layout_inspeccion, contenedorTarjetas, false)
         configurarCalendarioInspeccion(vista)
+        configurarBotonEliminar(vista)
         contadorInspecciones++
         contenedorTarjetas.addView(vista)
     }
@@ -180,6 +183,7 @@ class AgregarTareaActivity : AppCompatActivity() {
         vista.findViewById<EditText>(R.id.campo_descripcion_inspeccion)?.setText(inspeccion.descripcion)
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir_inspeccion), inspeccion.repetirCada)
         vista.tag = inspeccion
+        configurarBotonEliminar(vista)
         contadorInspecciones++
         contenedorTarjetas.addView(vista)
     }
@@ -278,6 +282,19 @@ class AgregarTareaActivity : AppCompatActivity() {
                 spinner.setSelection(i)
                 return
             }
+        }
+    }
+
+    private fun configurarBotonEliminar(vista: View) {
+        val boton = vista.findViewById<TextView>(R.id.boton_eliminar) ?: return
+        boton.setOnClickListener {
+            val tag = vista.tag
+            if (tag is Tarea && tag.id > 0) {
+                viewModel.eliminarTarea(tag.id)
+            } else if (tag is Inspeccion && tag.id > 0) {
+                viewModel.eliminarInspeccion(tag.id)
+            }
+            contenedorTarjetas.removeView(vista)
         }
     }
 

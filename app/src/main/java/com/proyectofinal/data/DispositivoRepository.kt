@@ -295,6 +295,11 @@ class DispositivoRepository(private val context: Context) {
 
     fun eliminarTarea(id: Long): Int {
         val db = dbHelper.writableDatabase
+        db.delete(
+            DatabaseHelper.TABLE_TAREA_DETALLES,
+            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ?",
+            arrayOf(id.toString())
+        )
         val filas = db.delete(
             DatabaseHelper.TABLE_TAREAS,
             "${DatabaseHelper.COL_TAREA_ID} = ?",

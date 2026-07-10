@@ -16,8 +16,8 @@
     <color name="color_foto_placeholder">#302A32</color>
     <color name="color_agregar_foto_area">#2A2028</color>
     <color name="color_tarjeta_dispositivo">#242027</color>
-    <color name="color_tarjeta_tarea">#211D23</color>
-    <color name="color_tarjeta_inspeccion">#211D23</color>
+    <color name="color_tarjeta_tarea">#2D1F26</color>
+    <color name="color_tarjeta_inspeccion">#1F1D26</color>
     <color name="color_tarjeta_atrasada">#35242B</color>
     <color name="purple_500">#F05B85</color>
     <color name="secondary_accent">#D85DCE</color>

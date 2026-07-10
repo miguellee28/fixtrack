@@ -241,10 +241,12 @@ class AgregarDispositivoActivity : AppCompatActivity() {
 
         val tarea = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
         configurarCalendarioTarea(tarea)
+        configurarBotonEliminar(tarea)
         contenedorTarjetas.addView(tarea)
 
         val inspeccion = LayoutInflater.from(this).inflate(R.layout.layout_inspeccion, contenedorTarjetas, false)
         configurarCalendarioInspeccion(inspeccion)
+        configurarBotonEliminar(inspeccion)
         contenedorTarjetas.addView(inspeccion)
 
         agregarBotonesDinamicos()
@@ -430,6 +432,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         vista.findViewById<EditText>(R.id.campo_nombre_tarea)?.setText(tarea.nombre)
         vista.findViewById<EditText>(R.id.campo_descripcion)?.setText(tarea.descripcion)
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir), tarea.repetirCada)
+        configurarBotonEliminar(vista)
         contenedorTarjetas.addView(vista)
     }
 
@@ -439,6 +442,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         vista.findViewById<EditText>(R.id.campo_nombre_inspeccion)?.setText(inspeccion.nombre)
         vista.findViewById<EditText>(R.id.campo_descripcion_inspeccion)?.setText(inspeccion.descripcion)
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir_inspeccion), inspeccion.repetirCada)
+        configurarBotonEliminar(vista)
         contenedorTarjetas.addView(vista)
     }
 
@@ -607,6 +611,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             }
             val tarea = LayoutInflater.from(this@AgregarDispositivoActivity).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
             configurarCalendarioTarea(tarea)
+            configurarBotonEliminar(tarea)
             contenedorTarjetas.addView(tarea)
         }
 
@@ -632,6 +637,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             }
             val inspeccion = LayoutInflater.from(this@AgregarDispositivoActivity).inflate(R.layout.layout_inspeccion, contenedorTarjetas, false)
             configurarCalendarioInspeccion(inspeccion)
+            configurarBotonEliminar(inspeccion)
             contenedorTarjetas.addView(inspeccion)
         }
 
@@ -649,6 +655,13 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             }
         }
         return true
+    }
+
+    private fun configurarBotonEliminar(vista: View) {
+        val boton = vista.findViewById<TextView>(R.id.boton_eliminar) ?: return
+        boton.setOnClickListener {
+            contenedorTarjetas.removeView(vista)
+        }
     }
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
