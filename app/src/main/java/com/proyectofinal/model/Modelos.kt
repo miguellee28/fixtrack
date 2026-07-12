@@ -27,12 +27,11 @@ data class Inspeccion(
     val fecha: String,
     val repetirCada: String,
     val dispositivoId: Long = 0,
-    val completada: Boolean = false
-)
-
-data class TareaConDispositivo(
-    val tarea: Tarea,
-    val nombreDispositivo: String
+    val completada: Boolean = false,
+    val condicion: String = "",
+    val notas: String = "",
+    val fotos: List<String> = emptyList(),
+    val fechaCompletada: String? = null
 )
 
 data class ItemProgramado(

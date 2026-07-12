@@ -26,7 +26,6 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GOOGLE_GENAI_API_KEY", "\"${localProperties.getProperty("GOOGLE_GENAI_API_KEY", "")}\"")
         buildConfigField("String", "BRAVE_SEARCH_API_KEY", "\"${localProperties.getProperty("BRAVE_SEARCH_API_KEY", "")}\"")
     }
@@ -55,10 +54,7 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     implementation(libs.androidx.activity)
-    implementation(libs.androidx.constraintlayout)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
 }

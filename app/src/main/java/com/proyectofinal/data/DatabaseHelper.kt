@@ -9,7 +9,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
 
     companion object {
         const val DATABASE_NAME = "proyecto_final.db"
-        const val DATABASE_VERSION = 3
+        const val DATABASE_VERSION = 4
 
         // Tabla Dispositivos
         const val TABLE_DISPOSITIVOS = "dispositivos"
@@ -39,6 +39,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         const val COL_INSPECCION_REPETIR = "repetir_cada"
         const val COL_INSPECCION_DISPOSITIVO_ID = "dispositivo_id"
         const val COL_INSPECCION_COMPLETADA = "completada"
+        const val COL_INSPECCION_CONDICION = "condicion"
+        const val COL_INSPECCION_NOTAS = "notas"
+        const val COL_INSPECCION_FOTOS = "fotos"
+        const val COL_INSPECCION_FECHA_COMPLETADA = "fecha_completada"
 
         // Tabla TareaDetalles
         const val TABLE_TAREA_DETALLES = "tarea_detalles"
@@ -88,6 +92,10 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
                 $COL_INSPECCION_REPETIR TEXT NOT NULL,
                 $COL_INSPECCION_DISPOSITIVO_ID INTEGER,
                 $COL_INSPECCION_COMPLETADA INTEGER DEFAULT 0,
+                $COL_INSPECCION_CONDICION TEXT DEFAULT '',
+                $COL_INSPECCION_NOTAS TEXT DEFAULT '',
+                $COL_INSPECCION_FOTOS TEXT DEFAULT '',
+                $COL_INSPECCION_FECHA_COMPLETADA TEXT DEFAULT NULL,
                 FOREIGN KEY ($COL_INSPECCION_DISPOSITIVO_ID) REFERENCES $TABLE_DISPOSITIVOS($COL_ID)
             )
         """)
@@ -131,6 +139,12 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         }
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE $TABLE_DISPOSITIVOS ADD COLUMN $COL_FOTO TEXT DEFAULT ''")
+        }
+        if (oldVersion < 4) {
+            db.execSQL("ALTER TABLE $TABLE_INSPECCIONES ADD COLUMN $COL_INSPECCION_CONDICION TEXT DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE_INSPECCIONES ADD COLUMN $COL_INSPECCION_NOTAS TEXT DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE_INSPECCIONES ADD COLUMN $COL_INSPECCION_FOTOS TEXT DEFAULT ''")
+            db.execSQL("ALTER TABLE $TABLE_INSPECCIONES ADD COLUMN $COL_INSPECCION_FECHA_COMPLETADA TEXT DEFAULT NULL")
         }
     }
 }

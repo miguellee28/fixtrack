@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -170,56 +171,78 @@ class DetalleDispositivoActivity : AppCompatActivity() {
 
     private fun mostrarFotoDispositivo() {
         if (fotoDispositivo.isBlank()) return
-        val uri = if (fotoDispositivo.startsWith("content:")) Uri.parse(fotoDispositivo) else Uri.fromFile(File(fotoDispositivo))
+        val uri = if (fotoDispositivo.startsWith("content:")) fotoDispositivo.toUri() else Uri.fromFile(File(fotoDispositivo))
         imagenDispositivo.setImageURI(uri)
         findViewById<TextView>(R.id.texto_foto_placeholder)?.visibility = android.view.View.GONE
     }
 
     private fun cargarCalendarioDispositivo() {
-        contenedorCalendario.removeAllViews()
-        val tareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId).map {
-            ItemCalendarioDispositivo(
-                tipo = "Mantenimiento",
-                nombre = it.nombre,
-                descripcion = it.descripcion,
-                repetirCada = it.repetirCada
-            )
-        }
-        val inspecciones = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId).map {
-            ItemCalendarioDispositivo(
-                tipo = "Inspeccion",
-                nombre = it.nombre,
-                descripcion = it.descripcion,
-                repetirCada = it.repetirCada
-            )
-        }
-        val items = (tareas + inspecciones)
-            .distinctBy { "${it.tipo}|${it.nombre}|${it.descripcion}|${it.repetirCada}" }
-            .sortedWith(compareBy<ItemCalendarioDispositivo> { it.tipo }.thenBy { it.nombre })
-
-        if (items.isEmpty()) {
-            val vacio = TextView(this).apply {
-                text = "No hay mantenimientos ni inspecciones registradas"
-                textSize = 14f
-                setTextColor(resources.getColor(R.color.text_secondary, theme))
-                setPadding(16.dp(), 12.dp(), 16.dp(), 12.dp())
+        lifecycleScope.launch {
+            val items = withContext(Dispatchers.IO) {
+                val tareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId).map {
+                    ItemCalendarioDispositivo(
+                        tipo = "Mantenimiento",
+                        nombre = it.nombre,
+                        descripcion = it.descripcion,
+                        repetirCada = it.repetirCada
+                    )
+                }
+                val inspecciones = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId).map {
+                    ItemCalendarioDispositivo(
+                        tipo = "Inspeccion",
+                        nombre = it.nombre,
+                        descripcion = it.descripcion,
+                        repetirCada = it.repetirCada
+                    )
+                }
+                (tareas + inspecciones)
+                    .distinctBy { "${it.tipo}|${it.nombre}|${it.descripcion}|${it.repetirCada}" }
+                    .sortedWith(compareBy<ItemCalendarioDispositivo> { it.tipo }.thenBy { it.nombre })
             }
-            contenedorCalendario.addView(vacio)
-            return
-        }
+            contenedorCalendario.removeAllViews()
+            if (items.isEmpty()) {
+                val vacio = TextView(this@DetalleDispositivoActivity).apply {
+                    text = getString(R.string.sin_elementos_calendario)
+                    textSize = 14f
+                    setTextColor(resources.getColor(R.color.text_secondary, theme))
+                    setPadding(16.dp(), 12.dp(), 16.dp(), 12.dp())
+                }
+                contenedorCalendario.addView(vacio)
+                return@launch
+            }
 
-        items.forEach { item ->
-            contenedorCalendario.addView(crearTarjetaCalendario(item))
+            items.forEach { item ->
+                contenedorCalendario.addView(crearTarjetaCalendario(item))
+            }
         }
     }
 
     private fun cargarResumenIA() {
-        textoResumenIA.text = "Analizando inspecciones..."
+        textoResumenIA.text = getString(R.string.analizando_inspecciones)
         lifecycleScope.launch {
             val dispositivo = dispositivoActual()
             val detalles = withContext(Dispatchers.IO) {
-                viewModel.obtenerTodasTareasPorDispositivo(dispositivoId)
+                val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId)
                     .flatMap { tarea -> viewModel.cargarDetallesPorTarea(tarea.id) }
+                val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId)
+                    .filter { it.condicion.isNotBlank() || it.notas.isNotBlank() }
+                    .map {
+                        TareaDetalle(
+                            id = it.id,
+                            tareaId = 0,
+                            tipo = "inspeccion",
+                            nombre = it.nombre,
+                            descripcion = it.descripcion,
+                            condicion = it.condicion,
+                            notas = it.notas,
+                            fotos = it.fotos,
+                            completada = it.completada,
+                            fechaCompletada = it.fechaCompletada
+                        )
+                    }
+                (detallesDeTareas + inspeccionesIndependientes).distinctBy {
+                    "${it.tareaId}:${it.tipo}:${it.id}:${it.nombre}:${it.fechaCompletada}"
+                }
             }
             val inspeccionesConEstado = detalles.filter {
                 it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())
@@ -277,12 +300,12 @@ class DetalleDispositivoActivity : AppCompatActivity() {
                 setPadding(0, 4.dp(), 0, 2.dp())
             })
             addView(TextView(this@DetalleDispositivoActivity).apply {
-                text = item.descripcion.ifBlank { "Sin descripcion" }
+                text = item.descripcion.ifBlank { getString(R.string.sin_descripcion) }
                 textSize = 13f
                 setTextColor(resources.getColor(R.color.text_secondary, theme))
             })
             addView(TextView(this@DetalleDispositivoActivity).apply {
-                text = "Repite: ${item.repetirCada}"
+                text = getString(R.string.repite_formato, item.repetirCada)
                 textSize = 12f
                 setTextColor(resources.getColor(R.color.text_secondary, theme))
                 setPadding(0, 6.dp(), 0, 0)

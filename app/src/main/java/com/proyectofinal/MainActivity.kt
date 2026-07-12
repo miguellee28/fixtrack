@@ -29,6 +29,8 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
@@ -83,7 +85,9 @@ class MainActivity : AppCompatActivity() {
     private val solicitudPermisoNotificaciones = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) {
-        MaintenanceNotificationScheduler.scheduleAll(this)
+        lifecycleScope.launch(Dispatchers.IO) {
+            MaintenanceNotificationScheduler.scheduleAll(applicationContext)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +101,9 @@ class MainActivity : AppCompatActivity() {
 
         viewModel = ViewModelProvider(this)[DispositivosViewModel::class.java]
         solicitarPermisoNotificaciones()
-        MaintenanceNotificationScheduler.scheduleAll(this)
+        lifecycleScope.launch(Dispatchers.IO) {
+            MaintenanceNotificationScheduler.scheduleAll(applicationContext)
+        }
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { vista, insets ->
             val barrasSistema = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -145,7 +151,7 @@ class MainActivity : AppCompatActivity() {
             viewModel.dispositivos.collect { lista ->
                 val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
                 if (listView != null) {
-                    listView.adapter = AdaptadorDispositivos(this@MainActivity, lista)
+                    asignarListaDispositivos(lista)
                     actualizarResumenDispositivosIA()
                 }
             }
@@ -204,13 +210,13 @@ class MainActivity : AppCompatActivity() {
         seccion.removeAllViews()
 
         val header = LayoutInflater.from(this).inflate(R.layout.section_header, seccion, false)
-        header.findViewById<TextView>(R.id.texto_titulo_seccion).text = "Atrasado"
-        header.findViewById<TextView>(R.id.texto_contador).text = "${items.size} items"
+        header.findViewById<TextView>(R.id.texto_titulo_seccion).text = getString(R.string.atrasado)
+        header.findViewById<TextView>(R.id.texto_contador).text = getString(R.string.cantidad_items, items.size)
         seccion.addView(header)
 
         if (items.isEmpty()) {
             val vacio = TextView(this).apply {
-                text = "No hay tareas atrasadas"
+                text = getString(R.string.sin_tareas_atrasadas)
                 textSize = 14f
                 setPadding(32.dp(), 16.dp(), 32.dp(), 16.dp())
                 setTextColor(resources.getColor(R.color.text_secondary, theme))
@@ -228,13 +234,13 @@ class MainActivity : AppCompatActivity() {
         seccion.removeAllViews()
 
         val header = LayoutInflater.from(this).inflate(R.layout.section_header, seccion, false)
-        header.findViewById<TextView>(R.id.texto_titulo_seccion).text = "Por Hacer"
-        header.findViewById<TextView>(R.id.texto_contador).text = "${items.size} items"
+        header.findViewById<TextView>(R.id.texto_titulo_seccion).text = getString(R.string.por_hacer)
+        header.findViewById<TextView>(R.id.texto_contador).text = getString(R.string.cantidad_items, items.size)
         seccion.addView(header)
 
         if (items.isEmpty()) {
             val vacio = TextView(this).apply {
-                text = "No hay tareas pendientes"
+                text = getString(R.string.sin_tareas_pendientes)
                 textSize = 14f
                 setPadding(32.dp(), 16.dp(), 32.dp(), 16.dp())
                 setTextColor(resources.getColor(R.color.text_secondary, theme))
@@ -254,17 +260,17 @@ class MainActivity : AppCompatActivity() {
         val grupos = agruparPorFechaYDispositivo(items)
         val gruposVisibles = grupos.take(5)
         val header = LayoutInflater.from(this).inflate(R.layout.section_header, seccion, false)
-        header.findViewById<TextView>(R.id.texto_titulo_seccion).text = "Proximo"
+        header.findViewById<TextView>(R.id.texto_titulo_seccion).text = getString(R.string.proximo)
         header.findViewById<TextView>(R.id.texto_contador).text = if (grupos.size > 5) {
-            "5 de ${grupos.size} tarjetas"
+            getString(R.string.cinco_de_tarjetas, grupos.size)
         } else {
-            "${grupos.size} tarjetas"
+            getString(R.string.cantidad_tarjetas, grupos.size)
         }
         seccion.addView(header)
 
         if (grupos.isEmpty()) {
             val vacio = TextView(this).apply {
-                text = "No hay tareas proximas"
+                text = getString(R.string.sin_tareas_proximas)
                 textSize = 14f
                 setPadding(32.dp(), 16.dp(), 32.dp(), 16.dp())
                 setTextColor(resources.getColor(R.color.text_secondary, theme))
@@ -290,7 +296,8 @@ class MainActivity : AppCompatActivity() {
         vista.setBackgroundResource(if (atrasada) R.drawable.fondo_tarjeta_atrasada else R.drawable.fondo_tarjeta)
         vista.findViewById<TextView>(R.id.texto_nombre_tarea).text = dispositivo
         vista.findViewById<TextView>(R.id.texto_descripcion_tarea).text = resumenGrupo(grupo)
-        vista.findViewById<TextView>(R.id.texto_nombre_dispositivo).text = "${primero.fecha} - ${textoCantidadGrupo(grupo)}"
+        vista.findViewById<TextView>(R.id.texto_nombre_dispositivo).text =
+            getString(R.string.fecha_y_cantidad, primero.fecha, textoCantidadGrupo(grupo))
         vista.findViewById<Button>(R.id.boton_ver).apply {
             visibility = View.VISIBLE
             setOnClickListener { abrirDetalleGrupo(grupo, soloLectura = false) }
@@ -335,7 +342,6 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, TareaDetalleActivity::class.java).apply {
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, primera.id)
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_IDS, tareas.map { it.id }.toLongArray())
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_NOMBRE, primera.nombre)
                 putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
                 putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
                 putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
@@ -361,10 +367,10 @@ class MainActivity : AppCompatActivity() {
         barraNavegacion.isItemActiveIndicatorEnabled = false
 
         val menuBarra = barraNavegacion.menu
-        agregarOpcion(menuBarra, ID_INICIO, R.drawable.ic_inicio, "Inicio")
-        agregarOpcion(menuBarra, ID_CALENDARIO, R.drawable.ic_calendario, "Calendario")
-        agregarOpcion(menuBarra, ID_DISPOSITIVOS, R.drawable.ic_dispositivos, "Dispositivos")
-        agregarOpcion(menuBarra, ID_AJUSTES, R.drawable.ic_ajustes, "Ajustes")
+        agregarOpcion(menuBarra, ID_INICIO, R.drawable.ic_inicio, getString(R.string.inicio))
+        agregarOpcion(menuBarra, ID_CALENDARIO, R.drawable.ic_calendario, getString(R.string.calendario))
+        agregarOpcion(menuBarra, ID_DISPOSITIVOS, R.drawable.ic_dispositivos, getString(R.string.dispositivos))
+        agregarOpcion(menuBarra, ID_AJUSTES, R.drawable.ic_ajustes, getString(R.string.ajustes))
         barraNavegacion.setOnItemSelectedListener { elemento ->
             procesarSeleccion(elemento)
         }
@@ -415,16 +421,26 @@ class MainActivity : AppCompatActivity() {
         actualizarSeccionProximo(viewModel.tareasLejanas.value)
     }
 
-    private fun asignarListaDispositivos() {
+    private fun asignarListaDispositivos(
+        dispositivos: List<Dispositivo> = viewModel.dispositivos.value
+    ) {
         val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
         if (listView != null) {
-            listView.adapter = AdaptadorDispositivos(this, viewModel.dispositivos.value)
+            if (listView.headerViewsCount == 0) {
+                val encabezado = layoutInflater.inflate(
+                    R.layout.item_header_resumen_dispositivos,
+                    listView,
+                    false
+                )
+                listView.addHeaderView(encabezado, null, false)
+            }
+            listView.adapter = AdaptadorDispositivos(this, dispositivos)
         }
     }
 
     private fun actualizarResumenDispositivosIA() {
         val textoResumen = contenedorPantallas.findViewById<TextView>(R.id.texto_resumen_dispositivos_ia) ?: return
-        textoResumen.text = "Analizando dispositivos..."
+        textoResumen.text = getString(R.string.analizando_dispositivos)
         lifecycleScope.launch {
             val resumen = withContext(Dispatchers.IO) {
                 generarResumenGeneralDispositivos()
@@ -446,9 +462,26 @@ class MainActivity : AppCompatActivity() {
         val dispositivosConAlerta = mutableSetOf<String>()
 
         for (dispositivo in dispositivos) {
-            val detalles = viewModel.obtenerTodasTareasPorDispositivo(dispositivo.id)
+            val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivo.id)
                 .flatMap { tarea -> viewModel.cargarDetallesPorTarea(tarea.id) }
                 .filter { it.tipo == "inspeccion" && it.condicion.isNotBlank() }
+            val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivo.id)
+                .filter { it.condicion.isNotBlank() }
+                .map {
+                    TareaDetalle(
+                        id = it.id,
+                        tareaId = 0,
+                        tipo = "inspeccion",
+                        nombre = it.nombre,
+                        descripcion = it.descripcion,
+                        condicion = it.condicion,
+                        notas = it.notas,
+                        fotos = it.fotos,
+                        completada = it.completada,
+                        fechaCompletada = it.fechaCompletada
+                    )
+                }
+            val detalles = detallesDeTareas + inspeccionesIndependientes
 
             inspeccionesConEstado += detalles.size
             malas += detalles.count { it.condicion == "malo" }
@@ -461,7 +494,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (inspeccionesConEstado == 0) {
-            return "Tienes ${dispositivos.size} dispositivo(s). Completa inspecciones con Bueno, Regular o Malo para generar un resumen real."
+            val cantidadDispositivos = if (dispositivos.size == 1) {
+                "Tienes 1 dispositivo registrado."
+            } else {
+                "Tienes ${dispositivos.size} dispositivos registrados."
+            }
+            return "$cantidadDispositivos Completa las inspecciones indicando si el estado es Bueno, Regular o Malo para conocer su condición general."
         }
 
         return when {
@@ -482,7 +520,9 @@ class MainActivity : AppCompatActivity() {
     private fun configurarClickLista() {
         val listView = contenedorPantallas.findViewById<ListView>(R.id.lista_dispositivos)
         listView?.onItemClickListener = AdapterView.OnItemClickListener { _, _, posicion, _ ->
-            val dispositivo = viewModel.dispositivos.value.getOrNull(posicion) ?: return@OnItemClickListener
+            val posicionDispositivo = posicion - listView.headerViewsCount
+            val dispositivo = viewModel.dispositivos.value.getOrNull(posicionDispositivo)
+                ?: return@OnItemClickListener
             val intent = Intent(this, DetalleDispositivoActivity::class.java).apply {
                 putExtra(DetalleDispositivoActivity.EXTRA_ID, dispositivo.id)
                 putExtra(DetalleDispositivoActivity.EXTRA_NOMBRE_DISPOSITIVO, dispositivo.nombre)
@@ -551,21 +591,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun abrirDetalleItem(item: ItemProgramado) {
-        if (item.tipo == "tarea") {
-            val intent = Intent(this, TareaDetalleActivity::class.java).apply {
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, item.id)
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_NOMBRE, item.nombre)
-                putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, item.nombreDispositivo)
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, item.fecha)
-                putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, viewModel.tareaSeleccionada.value == "completado")
-            }
-            resultadoTareaDetalle.launch(intent)
-        } else {
-            abrirDetalleInspeccion(item, viewModel.tareaSeleccionada.value == "completado")
-        }
-    }
-
     private fun abrirDetalleInspeccion(item: ItemProgramado, soloLectura: Boolean) {
         val intent = Intent(this, TareaDetalleActivity::class.java).apply {
             putExtra(TareaDetalleActivity.EXTRA_INSPECCION_ID, item.id)
@@ -585,7 +610,7 @@ class MainActivity : AppCompatActivity() {
         if (switchOscuro != null) {
             switchOscuro.isChecked = prefs.getBoolean(PREFS_TEMA_OSCURO, false)
             switchOscuro.setOnCheckedChangeListener { _, activo ->
-                prefs.edit().putBoolean(PREFS_TEMA_OSCURO, activo).apply()
+                prefs.edit { putBoolean(PREFS_TEMA_OSCURO, activo) }
                 if (activo) {
                     AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
                 } else {
@@ -624,8 +649,14 @@ class MainActivity : AppCompatActivity() {
             val dispositivo = dispositivos[posicion]
             vista.findViewById<TextView>(R.id.texto_nombre).text = dispositivo.nombre
             vista.findViewById<TextView>(R.id.texto_categoria).text = dispositivo.categoria
-            vista.findViewById<TextView>(R.id.texto_marca).text = "Marca: ${dispositivo.marca.ifBlank { "Sin marca" }}"
-            vista.findViewById<TextView>(R.id.texto_modelo).text = "Modelo: ${dispositivo.modelo.ifBlank { "Sin modelo" }}"
+            vista.findViewById<TextView>(R.id.texto_marca).text = contexto.getString(
+                R.string.marca_formato,
+                dispositivo.marca.ifBlank { contexto.getString(R.string.sin_marca) }
+            )
+            vista.findViewById<TextView>(R.id.texto_modelo).text = contexto.getString(
+                R.string.modelo_formato,
+                dispositivo.modelo.ifBlank { contexto.getString(R.string.sin_modelo) }
+            )
 
             val imagen = vista.findViewById<ImageView>(R.id.imagen_dispositivo)
             val placeholder = vista.findViewById<View>(R.id.texto_foto_placeholder)
@@ -633,7 +664,7 @@ class MainActivity : AppCompatActivity() {
                 imagen.setImageDrawable(null)
                 placeholder.visibility = View.VISIBLE
             } else {
-                val uri = if (dispositivo.foto.startsWith("content:")) Uri.parse(dispositivo.foto) else Uri.fromFile(File(dispositivo.foto))
+                val uri = if (dispositivo.foto.startsWith("content:")) dispositivo.foto.toUri() else Uri.fromFile(File(dispositivo.foto))
                 imagen.setImageURI(uri)
                 placeholder.visibility = View.GONE
             }
@@ -666,7 +697,11 @@ class MainActivity : AppCompatActivity() {
             val dispositivo = primero.nombreDispositivo.ifBlank { "Sin dispositivo" }
             vista.findViewById<TextView>(R.id.texto_nombre_tarea).text = dispositivo
             vista.findViewById<TextView>(R.id.texto_descripcion_tarea).text = resumenGrupoCalendario(grupo)
-            vista.findViewById<TextView>(R.id.texto_nombre_dispositivo).text = "${primero.fecha} - ${textoCantidadGrupoCalendario(grupo)}"
+            vista.findViewById<TextView>(R.id.texto_nombre_dispositivo).text = contexto.getString(
+                R.string.fecha_y_cantidad,
+                primero.fecha,
+                textoCantidadGrupoCalendario(grupo)
+            )
             vista.findViewById<Button>(R.id.boton_ver).apply {
                 visibility = View.VISIBLE
                 setOnClickListener { onVerClick(grupo) }

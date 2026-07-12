@@ -14,13 +14,25 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import java.time.LocalDate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MaintenanceNotificationReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != MaintenanceNotificationScheduler.ACTION_NOTIFY) return
+        val resultadoPendiente = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                procesarNotificacion(context.applicationContext, intent)
+            } finally {
+                resultadoPendiente.finish()
+            }
+        }
+    }
 
+    private fun procesarNotificacion(context: Context, intent: Intent) {
         val id = intent.getLongExtra(MaintenanceNotificationScheduler.EXTRA_ID, -1L)
         val type = intent.getStringExtra(MaintenanceNotificationScheduler.EXTRA_TYPE).orEmpty()
         if (id <= 0L || type.isBlank()) return
@@ -69,7 +81,11 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId(type, id), notification)
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId(type, id), notification)
+        } catch (_: SecurityException) {
+            return
+        }
         if (isOverdueTask) {
             MaintenanceNotificationScheduler.scheduleAll(context)
         }
@@ -113,8 +129,7 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
     }
 
     private fun isOverdue(date: String): Boolean {
-        val itemDate = runCatching { LocalDate.parse(date) }.getOrNull() ?: return false
-        return !itemDate.isAfter(LocalDate.now())
+        return MaintenanceDateUtils.estaAtrasada(date)
     }
 
     private fun canPostNotifications(context: Context): Boolean {
@@ -126,7 +141,6 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
     }
 
     private fun createChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
 

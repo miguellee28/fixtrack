@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -21,7 +22,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Inspección"
+        android:text="@string/inspeccion"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -29,7 +30,7 @@
             android:id="@+id/boton_eliminar"
             android:layout_width="28dp"
             android:layout_height="28dp"
-            android:text="✕"
+        android:text="@string/cerrar"
             android:textSize="14sp"
             android:gravity="center"
             android:clickable="true"
@@ -42,18 +43,19 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="NOMBRE INSPECCIÓN"
+        android:text="@string/nombre_inspeccion_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
 
     <EditText
         android:id="@+id/campo_nombre_inspeccion"
+        android:importantForAutofill="no"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:background="@drawable/fondo_input_nota"
         android:gravity="center_vertical"
-        android:hint="Ej: Revision de fugas"
+        android:hint="@string/ejemplo_inspeccion"
         android:includeFontPadding="false"
         android:inputType="text"
         android:minHeight="0dp"
@@ -66,17 +68,18 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="DESCRIPCIÓN"
+        android:text="@string/descripcion_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
 
     <EditText
         android:id="@+id/campo_descripcion_inspeccion"
+        android:importantForAutofill="no"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:background="@drawable/fondo_input_nota"
-        android:hint="Ej: Verificar conexiones, presion y ruido"
+        android:hint="@string/ejemplo_descripcion_inspeccion"
         android:includeFontPadding="false"
         android:inputType="textMultiLine"
         android:gravity="center_vertical"
@@ -90,7 +93,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="FECHA"
+        android:text="@string/fecha_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
@@ -101,8 +104,8 @@
         android:layout_height="wrap_content"
         android:background="@drawable/fondo_fecha_editable"
         android:clickable="true"
-        android:contentDescription="Cambiar fecha"
-        android:drawableEnd="@drawable/ic_editar_fecha"
+        android:contentDescription="@string/cambiar_fecha"
+        app:drawableEndCompat="@drawable/ic_editar_fecha"
         android:drawablePadding="8dp"
         android:focusable="true"
         android:foreground="?attr/selectableItemBackground"
@@ -118,7 +121,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="REPETIR CADA"
+        android:text="@string/repetir_cada_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />

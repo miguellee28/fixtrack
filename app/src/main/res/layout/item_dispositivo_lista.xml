@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:baselineAligned="false"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/fondo_tarjeta"
@@ -21,6 +22,7 @@
             android:id="@+id/imagen_dispositivo"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:contentDescription="@string/foto_dispositivo"
             android:scaleType="centerCrop" />
 
         <TextView
@@ -28,7 +30,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:text="Foto"
+            android:text="@string/foto"
             android:textColor="@color/text_secondary"
             android:textSize="11sp" />
 

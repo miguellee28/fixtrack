@@ -20,7 +20,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -38,10 +40,10 @@ class AgregarTareaActivity : AppCompatActivity() {
     private lateinit var botonAgregarInspeccion: Button
     private lateinit var botonGuardar: Button
 
-    private var contadorTareas = 0
-    private var contadorInspecciones = 0
     private var dispositivosDisponibles: List<Dispositivo> = emptyList()
     private var dispositivoInicialId: Long = 0
+    private val tareasEliminadas = mutableSetOf<Long>()
+    private val inspeccionesEliminadas = mutableSetOf<Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,17 +65,20 @@ class AgregarTareaActivity : AppCompatActivity() {
         botonAgregarInspeccion = findViewById(R.id.boton_agregar_inspeccion)
         botonGuardar = findViewById(R.id.boton_guardar)
 
-        configurarSpinner()
         configurarBotones()
-
-        agregarTarjetaTarea()
-        agregarTarjetaInspeccion()
-        configurarSeleccionDispositivo()
-        seleccionarDispositivoInicial()
+        lifecycleScope.launch {
+            configurarSpinner()
+            agregarTarjetaTarea()
+            agregarTarjetaInspeccion()
+            configurarSeleccionDispositivo()
+            seleccionarDispositivoInicial()
+        }
     }
 
-    private fun configurarSpinner() {
-        dispositivosDisponibles = viewModel.obtenerTodosDispositivos()
+    private suspend fun configurarSpinner() {
+        dispositivosDisponibles = withContext(Dispatchers.IO) {
+            viewModel.obtenerTodosDispositivos()
+        }
 
         if (dispositivosDisponibles.isEmpty()) {
             val opciones = listOf("Primero agrega un dispositivo")
@@ -152,7 +157,6 @@ class AgregarTareaActivity : AppCompatActivity() {
         val vista = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
         configurarCalendarioTarea(vista)
         configurarBotonEliminar(vista)
-        contadorTareas++
         contenedorTarjetas.addView(vista)
     }
 
@@ -164,7 +168,6 @@ class AgregarTareaActivity : AppCompatActivity() {
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir), tarea.repetirCada)
         vista.tag = tarea
         configurarBotonEliminar(vista)
-        contadorTareas++
         contenedorTarjetas.addView(vista)
     }
 
@@ -172,7 +175,6 @@ class AgregarTareaActivity : AppCompatActivity() {
         val vista = LayoutInflater.from(this).inflate(R.layout.layout_inspeccion, contenedorTarjetas, false)
         configurarCalendarioInspeccion(vista)
         configurarBotonEliminar(vista)
-        contadorInspecciones++
         contenedorTarjetas.addView(vista)
     }
 
@@ -184,34 +186,42 @@ class AgregarTareaActivity : AppCompatActivity() {
         seleccionarSpinnerPorTexto(vista.findViewById(R.id.spinner_repetir_inspeccion), inspeccion.repetirCada)
         vista.tag = inspeccion
         configurarBotonEliminar(vista)
-        contadorInspecciones++
         contenedorTarjetas.addView(vista)
     }
 
     private fun mostrarTarjetasVacias() {
+        tareasEliminadas.clear()
+        inspeccionesEliminadas.clear()
         contenedorTarjetas.removeAllViews()
-        contadorTareas = 0
-        contadorInspecciones = 0
         agregarTarjetaTarea()
         agregarTarjetaInspeccion()
     }
 
     private fun cargarTarjetasDelDispositivo(dispositivoId: Long) {
-        val tareas = viewModel.obtenerTareasPorDispositivo(dispositivoId)
-        val inspecciones = viewModel.obtenerInspeccionesPorDispositivo(dispositivoId)
+        tareasEliminadas.clear()
+        inspeccionesEliminadas.clear()
+        lifecycleScope.launch {
+            val (tareas, inspecciones) = withContext(Dispatchers.IO) {
+                Pair(
+                    viewModel.obtenerTareasPorDispositivo(dispositivoId),
+                    viewModel.obtenerInspeccionesPorDispositivo(dispositivoId)
+                )
+            }
+            val posicionActual = spinnerDispositivo.selectedItemPosition
+            val dispositivoActual = dispositivosDisponibles.getOrNull(posicionActual - 1)?.id
+            if (dispositivoActual != dispositivoId) return@launch
 
-        contenedorTarjetas.removeAllViews()
-        contadorTareas = 0
-        contadorInspecciones = 0
+            contenedorTarjetas.removeAllViews()
 
-        if (tareas.isEmpty() && inspecciones.isEmpty()) {
-            agregarTarjetaTarea()
-            agregarTarjetaInspeccion()
-            return
+            if (tareas.isEmpty() && inspecciones.isEmpty()) {
+                agregarTarjetaTarea()
+                agregarTarjetaInspeccion()
+                return@launch
+            }
+
+            tareas.forEach { agregarTarjetaTarea(it) }
+            inspecciones.forEach { agregarTarjetaInspeccion(it) }
         }
-
-        tareas.forEach { agregarTarjetaTarea(it) }
-        inspecciones.forEach { agregarTarjetaInspeccion(it) }
     }
 
 
@@ -290,18 +300,17 @@ class AgregarTareaActivity : AppCompatActivity() {
         boton.setOnClickListener {
             val tag = vista.tag
             if (tag is Tarea && tag.id > 0) {
-                viewModel.eliminarTarea(tag.id)
+                tareasEliminadas.add(tag.id)
             } else if (tag is Inspeccion && tag.id > 0) {
-                viewModel.eliminarInspeccion(tag.id)
+                inspeccionesEliminadas.add(tag.id)
             }
             contenedorTarjetas.removeView(vista)
         }
     }
 
     private fun guardarTareasEInspecciones() {
-        val dispositivos = viewModel.obtenerTodosDispositivos()
         val dispositivoId = if (spinnerDispositivo.isEnabled && spinnerDispositivo.selectedItemPosition > 0) {
-            dispositivos.getOrNull(spinnerDispositivo.selectedItemPosition - 1)?.id
+            dispositivosDisponibles.getOrNull(spinnerDispositivo.selectedItemPosition - 1)?.id
         } else {
             null
         }
@@ -321,13 +330,16 @@ class AgregarTareaActivity : AppCompatActivity() {
                     val repetir = vista.findViewById<Spinner>(R.id.spinner_repetir)?.selectedItem?.toString() ?: "Una vez"
                     val fecha = vista.findViewById<TextView>(R.id.texto_fecha_tarea)?.text.toString()
                     tareas.add(
-                        Tarea(
-                            id = existente?.id ?: 0,
+                        existente?.copy(
                             nombre = nombre,
                             descripcion = desc,
                             fecha = fecha,
-                            repetirCada = repetir,
-                            completada = existente?.completada ?: false
+                            repetirCada = repetir
+                        ) ?: Tarea(
+                            nombre = nombre,
+                            descripcion = desc,
+                            fecha = fecha,
+                            repetirCada = repetir
                         )
                     )
                 }
@@ -342,28 +354,41 @@ class AgregarTareaActivity : AppCompatActivity() {
                     val repetir = vista.findViewById<Spinner>(R.id.spinner_repetir_inspeccion)?.selectedItem?.toString() ?: "Una vez"
                     val fecha = vista.findViewById<TextView>(R.id.texto_fecha_inspeccion)?.text.toString()
                     inspecciones.add(
-                        Inspeccion(
-                            id = existente?.id ?: 0,
+                        existente?.copy(
                             nombre = nombre,
                             descripcion = desc,
                             fecha = fecha,
-                            repetirCada = repetir,
-                            completada = existente?.completada ?: false
+                            repetirCada = repetir
+                        ) ?: Inspeccion(
+                            nombre = nombre,
+                            descripcion = desc,
+                            fecha = fecha,
+                            repetirCada = repetir
                         )
                     )
                 }
             }
         }
 
-        if (tareas.isEmpty() && inspecciones.isEmpty()) {
+        val hayEliminacionesPendientes = tareasEliminadas.isNotEmpty() || inspeccionesEliminadas.isNotEmpty()
+        if (tareas.isEmpty() && inspecciones.isEmpty() && !hayEliminacionesPendientes) {
             Toast.makeText(this, "Agrega al menos una tarea o inspeccion", Toast.LENGTH_SHORT).show()
             return
         }
 
         lifecycleScope.launch {
-            val hayItemsExistentes = tareas.any { it.id > 0 } || inspecciones.any { it.id > 0 }
+            val hayItemsExistentes = tareas.any { it.id > 0 } ||
+                inspecciones.any { it.id > 0 } ||
+                tareasEliminadas.isNotEmpty() ||
+                inspeccionesEliminadas.isNotEmpty()
             if (dispositivoId != null && hayItemsExistentes) {
-                viewModel.guardarEdicionCalendario(dispositivoId, tareas, inspecciones)
+                viewModel.guardarEdicionCalendario(
+                    dispositivoId,
+                    tareas,
+                    inspecciones,
+                    tareasEliminadas,
+                    inspeccionesEliminadas
+                )
             } else {
                 viewModel.guardarTareasEInspecciones(dispositivoId, tareas, inspecciones)
             }

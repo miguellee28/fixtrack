@@ -3,6 +3,7 @@ package com.proyectofinal
 import com.proyectofinal.model.*
 import com.proyectofinal.viewmodel.DispositivosViewModel
 import android.app.DatePickerDialog
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -65,9 +66,15 @@ class AgregarDispositivoActivity : AppCompatActivity() {
     ) { resultado ->
         if (resultado.resultCode == RESULT_OK) {
             resultado.data?.data?.let { uri ->
-                fotoIaUri = guardarFotoDispositivo(uri) ?: uri
-                imagenDispositivoIA?.setImageURI(fotoIaUri)
-                contenedorTarjetas.findViewById<View>(R.id.texto_foto_placeholder)?.visibility = View.GONE
+                lifecycleScope.launch {
+                    fotoIaUri = withContext(Dispatchers.IO) { guardarFotoDispositivo(uri) }
+                    if (fotoIaUri != null) {
+                        imagenDispositivoIA?.setImageURI(fotoIaUri)
+                        contenedorTarjetas.findViewById<View>(R.id.texto_foto_placeholder)?.visibility = View.GONE
+                    } else {
+                        Toast.makeText(this@AgregarDispositivoActivity, "No se pudo guardar la foto", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }
@@ -81,6 +88,9 @@ class AgregarDispositivoActivity : AppCompatActivity() {
                 imagenDispositivoIA?.setImageURI(fotoIaUri)
                 contenedorTarjetas.findViewById<View>(R.id.texto_foto_placeholder)?.visibility = View.GONE
             }
+        } else {
+            fotoIaArchivo?.delete()
+            fotoIaArchivo = null
         }
     }
 
@@ -146,11 +156,15 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             val inspecciones = construirInspecciones()
 
             lifecycleScope.launch {
-                val dispositivoId = viewModel.guardarDispositivoConTareaEInspeccion(dispositivo, null, null)
-                viewModel.guardarTareasEInspecciones(dispositivoId, tareas, inspecciones)
-                Toast.makeText(this@AgregarDispositivoActivity, "Dispositivo guardado", Toast.LENGTH_SHORT).show()
-                setResult(RESULT_OK)
-                finish()
+                runCatching {
+                    viewModel.guardarDispositivoConCalendario(dispositivo, tareas, inspecciones)
+                }.onSuccess {
+                    Toast.makeText(this@AgregarDispositivoActivity, "Dispositivo guardado", Toast.LENGTH_SHORT).show()
+                    setResult(RESULT_OK)
+                    finish()
+                }.onFailure {
+                    Toast.makeText(this@AgregarDispositivoActivity, "No se pudo guardar el dispositivo", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -281,21 +295,21 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         }
 
         panel.addView(TextView(this).apply {
-            text = "Asistente IA"
+            text = getString(R.string.asistente_ia)
             textSize = 18f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             setPadding(0, 0, 0, 8.dp())
         })
 
         panel.addView(TextView(this).apply {
-            text = "Toca la foto del dispositivo para agregar una imagen opcional."
+            text = getString(R.string.foto_opcional_ia)
             textSize = 13f
             setTextColor(resources.getColor(R.color.text_secondary, theme))
             setPadding(0, 0, 0, 10.dp())
         })
 
         botonBuscarIA = Button(this).apply {
-            text = "Buscar mantenimiento con IA"
+            text = getString(R.string.buscar_mantenimiento_ia)
             setAllCaps(false)
             textSize = 14f
             setTextColor(resources.getColor(R.color.white, theme))
@@ -357,12 +371,12 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         modelo: String
     ) {
         botonBuscarIA?.isEnabled = false
-        textoEstadoIA?.text = "Buscando fuentes y generando calendario..."
+        textoEstadoIA?.text = getString(R.string.buscando_fuentes)
         textoFuentesIA?.text = ""
 
         lifecycleScope.launch {
             val resultado = runCatching {
-                actualizarEstadoIA("Preparando datos...")
+                actualizarEstadoIA(getString(R.string.preparando_datos))
                 val imageBytes = withContext(Dispatchers.IO) { leerFotoIA() }
                 withContext(Dispatchers.IO) {
                     aiService.generateSchedule(nombre, categoria, marca, modelo, imageBytes) { mensaje ->
@@ -374,7 +388,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             botonBuscarIA?.isEnabled = true
             resultado
                 .onSuccess {
-                    actualizarEstadoIA("Aplicando calendario sugerido...")
+                    actualizarEstadoIA(getString(R.string.aplicando_calendario))
                     aplicarResultadoIA(it)
                 }
                 .onFailure { error ->
@@ -382,7 +396,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
                         is SocketTimeoutException -> "La solicitud tardo demasiado. Intenta con marca/modelo escritos o una foto mas clara."
                         else -> error.message ?: "Error desconocido"
                     }
-                    textoEstadoIA?.text = "No se pudo generar el calendario: $mensaje"
+                    textoEstadoIA?.text = getString(R.string.error_generar_calendario, mensaje)
                     Toast.makeText(this@AgregarDispositivoActivity, "No se pudo generar el calendario", Toast.LENGTH_SHORT).show()
                 }
         }
@@ -403,13 +417,13 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         resultado.tareas.forEach { agregarTarjetaTareaDesdeIA(it) }
         resultado.inspecciones.forEach { agregarTarjetaInspeccionDesdeIA(it) }
 
-        textoEstadoIA?.text = "Calendario generado. Revisa y edita antes de aceptar."
+        textoEstadoIA?.text = getString(R.string.calendario_generado)
         textoFuentesIA?.text = if (resultado.fuentes.isEmpty()) {
             ""
         } else {
-            "Fuentes:\n" + resultado.fuentes.joinToString("\n") { fuente ->
+            getString(R.string.fuentes_formato, resultado.fuentes.joinToString("\n") { fuente ->
                 "- ${fuente.titulo.ifBlank { fuente.url }}\n  ${fuente.url}"
-            }
+            })
         }
     }
 
@@ -578,7 +592,13 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             putExtra(MediaStore.EXTRA_OUTPUT, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
-        resultadoCamaraIA.launch(intent)
+        try {
+            resultadoCamaraIA.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            archivoFoto.delete()
+            fotoIaArchivo = null
+            Toast.makeText(this, "No hay una aplicación de cámara disponible", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun abrirGaleriaIA() {
@@ -590,7 +610,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         contenedorBotonesAgregar.removeAllViews()
 
         val botonTarea = Button(this).apply {
-            text = "+ Agregar Mantenimiento"
+            text = getString(R.string.agregar_mantenimiento)
             setAllCaps(false)
             textSize = 13f
             setTextColor(resources.getColor(R.color.white, theme))
@@ -616,7 +636,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         }
 
         val botonInspeccion = Button(this).apply {
-            text = "+ Agregar Inspeccion"
+            text = getString(R.string.agregar_inspeccion)
             setAllCaps(false)
             textSize = 13f
             setTextColor(resources.getColor(R.color.white, theme))
@@ -666,8 +686,4 @@ class AgregarDispositivoActivity : AppCompatActivity() {
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
 
-    private fun ocultarTarjetas() {
-        contenedorTarjetas.removeAllViews()
-        contenedorBotonesAgregar.removeAllViews()
-    }
 }

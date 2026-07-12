@@ -13,7 +13,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Detalle del dispositivo"
+        android:text="@string/detalle_dispositivo"
         android:textSize="18sp"
         android:textStyle="bold"
         android:layout_marginBottom="8dp" />
@@ -32,6 +32,7 @@
             android:id="@+id/foto_dispositivo"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:contentDescription="@string/foto_dispositivo"
             android:scaleType="centerCrop" />
 
         <LinearLayout
@@ -46,13 +47,13 @@
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_marginBottom="6dp"
-                android:contentDescription="Agregar foto"
+                android:contentDescription="@string/agregar_foto"
                 android:src="@drawable/ic_agregar_foto" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Agregar foto del dispositivo"
+                android:text="@string/agregar_foto_dispositivo"
                 android:textColor="@color/purple_500"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -60,7 +61,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Toca para camara o galeria"
+                android:text="@string/toca_camara_galeria"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -72,18 +73,19 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="NOMBRE DEL DISPOSITIVO"
+        android:text="@string/nombre_dispositivo_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
 
     <EditText
         android:id="@+id/campo_nombre"
+        android:importantForAutofill="no"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:background="@drawable/fondo_input_nota"
         android:gravity="center_vertical"
-        android:hint="Ej: Bomba de agua principal"
+        android:hint="@string/ejemplo_nombre_dispositivo"
         android:includeFontPadding="false"
         android:inputType="text"
         android:minHeight="0dp"
@@ -96,7 +98,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="CATEGORÍA"
+        android:text="@string/categoria_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
@@ -116,18 +118,19 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="MARCA"
+        android:text="@string/marca_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
 
     <EditText
         android:id="@+id/campo_marca"
+        android:importantForAutofill="no"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:background="@drawable/fondo_input_nota"
         android:gravity="center_vertical"
-        android:hint="Ej: Grundfos"
+        android:hint="@string/ejemplo_marca"
         android:includeFontPadding="false"
         android:inputType="text"
         android:minHeight="0dp"
@@ -140,18 +143,19 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="MODELO"
+        android:text="@string/modelo_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
 
     <EditText
         android:id="@+id/campo_modelo"
+        android:importantForAutofill="no"
         android:layout_width="match_parent"
         android:layout_height="52dp"
         android:background="@drawable/fondo_input_nota"
         android:gravity="center_vertical"
-        android:hint="Ej: CR 10-4"
+        android:hint="@string/ejemplo_modelo"
         android:includeFontPadding="false"
         android:inputType="text"
         android:minHeight="0dp"

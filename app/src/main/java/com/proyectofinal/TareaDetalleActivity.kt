@@ -2,6 +2,7 @@ package com.proyectofinal
 
 import com.proyectofinal.model.*
 import com.proyectofinal.viewmodel.DispositivosViewModel
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -20,6 +21,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
@@ -37,7 +39,6 @@ class TareaDetalleActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_TAREA_ID = "tarea_id"
         const val EXTRA_TAREA_IDS = "tarea_ids"
-        const val EXTRA_TAREA_NOMBRE = "tarea_nombre"
         const val EXTRA_DISPOSITIVO_NOMBRE = "dispositivo_nombre"
         const val EXTRA_TAREA_FECHA = "tarea_fecha"
         const val EXTRA_SOLO_LECTURA = "solo_lectura"
@@ -74,6 +75,8 @@ class TareaDetalleActivity : AppCompatActivity() {
                     agregarFotoPreview(archivo.absolutePath)
                 }
             }
+        } else {
+            fotosTemporales.removeLastOrNull()?.let { ruta -> File(ruta).delete() }
         }
     }
 
@@ -82,7 +85,16 @@ class TareaDetalleActivity : AppCompatActivity() {
     ) { resultado ->
         if (resultado.resultCode == RESULT_OK) {
             val uri = resultado.data?.data
-            uri?.let { agregarFotoPreview(it.toString()) }
+            uri?.let {
+                lifecycleScope.launch {
+                    val ruta = withContext(Dispatchers.IO) { guardarFotoGaleria(it) }
+                    if (ruta != null) {
+                        agregarFotoPreview(ruta)
+                    } else {
+                        Toast.makeText(this@TareaDetalleActivity, "No se pudo guardar la foto", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         }
     }
 
@@ -142,8 +154,28 @@ class TareaDetalleActivity : AppCompatActivity() {
 
     private fun cargarDetalles() {
         lifecycleScope.launch {
-            val detalles = inspeccionDirecta?.let { listOf(it) } ?: withContext(Dispatchers.IO) {
-                tareaIds.flatMap { id -> viewModel.cargarDetallesPorTarea(id) }
+            val detalles = if (inspeccionDirectaId > 0) {
+                val inspeccion = viewModel.obtenerInspeccionPorId(inspeccionDirectaId)
+                inspeccion?.let {
+                    listOf(
+                        TareaDetalle(
+                            id = it.id,
+                            tareaId = 0,
+                            tipo = "inspeccion",
+                            nombre = it.nombre,
+                            descripcion = it.descripcion,
+                            condicion = it.condicion,
+                            notas = it.notas,
+                            fotos = it.fotos,
+                            completada = it.completada,
+                            fechaCompletada = it.fechaCompletada
+                        )
+                    )
+                } ?: inspeccionDirecta?.let { listOf(it) }.orEmpty()
+            } else {
+                withContext(Dispatchers.IO) {
+                    tareaIds.flatMap { id -> viewModel.cargarDetallesPorTarea(id) }
+                }
             }
             val detallesParaMostrar = detalles
                 .distinctBy { claveVisualDetalle(it) }
@@ -167,7 +199,7 @@ class TareaDetalleActivity : AppCompatActivity() {
 
             if (detallesParaMostrar.isEmpty()) {
                 val textoVacio = TextView(this@TareaDetalleActivity).apply {
-                    text = "No hay detalles registrados"
+                    text = getString(R.string.sin_detalles)
                     textSize = 14f
                     setTextColor(resources.getColor(R.color.text_secondary, theme))
                     setPadding(0, 16.dp(), 0, 16.dp())
@@ -253,7 +285,7 @@ class TareaDetalleActivity : AppCompatActivity() {
     private fun configurarBotones() {
         if (soloLectura) {
             botonAgregarFoto.visibility = View.GONE
-            botonGuardar.text = "Cerrar"
+            botonGuardar.text = getString(R.string.cerrar_boton)
             botonGuardar.setOnClickListener {
                 setResult(RESULT_OK)
                 finish()
@@ -293,12 +325,29 @@ class TareaDetalleActivity : AppCompatActivity() {
             putExtra(MediaStore.EXTRA_OUTPUT, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
-        resultadoCamara.launch(intent)
+        try {
+            resultadoCamara.launch(intent)
+        } catch (_: ActivityNotFoundException) {
+            fotosTemporales.remove(archivoFoto.absolutePath)
+            archivoFoto.delete()
+            Toast.makeText(this, "No hay una aplicación de cámara disponible", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun abrirGaleria() {
         val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         resultadoGaleria.launch(intent)
+    }
+
+    private fun guardarFotoGaleria(uri: Uri): String? {
+        return runCatching {
+            val carpetaFotos = File(filesDir, "detalle_fotos").apply { mkdirs() }
+            val archivoFoto = File(carpetaFotos, "foto_${System.currentTimeMillis()}.jpg")
+            contentResolver.openInputStream(uri)?.use { entrada ->
+                archivoFoto.outputStream().use { salida -> entrada.copyTo(salida) }
+            } ?: return null
+            archivoFoto.absolutePath
+        }.getOrNull()
     }
 
     private fun agregarFotoPreview(ruta: String) {
@@ -312,10 +361,9 @@ class TareaDetalleActivity : AppCompatActivity() {
         try {
             val file = File(ruta)
             if (file.exists()) {
-                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                imagen.setImageBitmap(bitmap)
+                imagen.setImageBitmap(cargarBitmapReducido(file.absolutePath))
             } else {
-                val uri = Uri.parse(ruta)
+                val uri = ruta.toUri()
                 imagen.setImageURI(uri)
             }
         } catch (e: Exception) {
@@ -335,10 +383,42 @@ class TareaDetalleActivity : AppCompatActivity() {
         contenedorFotos.addView(vista)
     }
 
+    private fun cargarBitmapReducido(ruta: String, maximo: Int = 512): android.graphics.Bitmap? {
+        val opciones = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(ruta, opciones)
+        var escala = 1
+        while (opciones.outWidth / escala > maximo || opciones.outHeight / escala > maximo) {
+            escala *= 2
+        }
+        opciones.inJustDecodeBounds = false
+        opciones.inSampleSize = escala
+        return BitmapFactory.decodeFile(ruta, opciones)
+    }
+
     private fun guardarDetalles() {
         lifecycleScope.launch {
             if (inspeccionDirectaId > 0) {
-                viewModel.marcarInspeccionCompletada(inspeccionDirectaId)
+                val vista = (0 until contenedorDetalles.childCount)
+                    .map { contenedorDetalles.getChildAt(it) }
+                    .firstOrNull { it.findViewById<TextView>(R.id.texto_nombre_inspeccion) != null }
+                if (vista == null) {
+                    Toast.makeText(this@TareaDetalleActivity, "No se encontró la inspección", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val condicion = condicionSeleccionada(vista)
+                if (condicion.isBlank()) {
+                    Toast.makeText(this@TareaDetalleActivity, "Selecciona Bueno, Regular o Malo", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val notas = vista.findViewById<EditText>(R.id.campo_notas_inspeccion)?.text.toString().trim()
+                val fechaCompletada = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                viewModel.completarInspeccion(
+                    inspeccionDirectaId,
+                    condicion,
+                    notas,
+                    fotosSeleccionadas.distinct(),
+                    fechaCompletada
+                )
                 Toast.makeText(this@TareaDetalleActivity, "Inspección completada", Toast.LENGTH_SHORT).show()
                 setResult(RESULT_OK)
                 finish()
@@ -361,13 +441,7 @@ class TareaDetalleActivity : AppCompatActivity() {
                 val nombreInspeccion = vista.findViewById<TextView>(R.id.texto_nombre_inspeccion)
                 if (nombreInspeccion != null) {
                     val notas = vista.findViewById<EditText>(R.id.campo_notas_inspeccion)?.text.toString()
-                    val botonBueno = vista.findViewById<Button>(R.id.boton_bueno)
-                    val condicion = when {
-                        botonBueno?.alpha == 1.0f -> "bueno"
-                        vista.findViewById<Button>(R.id.boton_regular)?.alpha == 1.0f -> "regular"
-                        vista.findViewById<Button>(R.id.boton_malo)?.alpha == 1.0f -> "malo"
-                        else -> ""
-                    }
+                    val condicion = condicionSeleccionada(vista)
                     val fechaCompletada = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                     val detallesDuplicados = detallesExistentes.filter {
                         it.tipo == "inspeccion" &&
@@ -394,6 +468,15 @@ class TareaDetalleActivity : AppCompatActivity() {
             Toast.makeText(this@TareaDetalleActivity, "Tarea completada", Toast.LENGTH_SHORT).show()
             setResult(RESULT_OK)
             finish()
+        }
+    }
+
+    private fun condicionSeleccionada(vista: View): String {
+        return when {
+            vista.findViewById<Button>(R.id.boton_bueno)?.alpha == 1.0f -> "bueno"
+            vista.findViewById<Button>(R.id.boton_regular)?.alpha == 1.0f -> "regular"
+            vista.findViewById<Button>(R.id.boton_malo)?.alpha == 1.0f -> "malo"
+            else -> ""
         }
     }
 

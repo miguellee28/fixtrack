@@ -3,7 +3,6 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/app_background"
     android:orientation="vertical"
     android:paddingStart="16dp"
     android:paddingTop="16dp"
@@ -12,7 +11,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Agregar Tarea"
+        android:text="@string/agregar_tarea"
         android:fontFamily="sans-serif-medium"
         android:letterSpacing="-0.02"
         android:textColor="@color/text_primary"
@@ -50,7 +49,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Dispositivo (opcional)"
+            android:text="@string/dispositivo_opcional"
                     android:textSize="18sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="8dp" />
@@ -87,7 +86,7 @@
             android:id="@+id/boton_agregar_tarea"
             android:layout_width="match_parent"
             android:layout_height="44dp"
-            android:text="+ Agregar Mantenimiento"
+            android:text="@string/agregar_mantenimiento"
             android:textAllCaps="false"
             android:fontFamily="sans-serif-medium"
             android:textColor="@color/white"
@@ -101,7 +100,7 @@
             android:layout_width="match_parent"
             android:layout_height="44dp"
             android:layout_marginTop="6dp"
-            android:text="+ Agregar Inspeccion"
+            android:text="@string/agregar_inspeccion"
             android:textAllCaps="false"
             android:fontFamily="sans-serif-medium"
             android:textColor="@color/white"
@@ -118,7 +117,7 @@
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:layout_margin="16dp"
-        android:text="Guardar"
+        android:text="@string/guardar"
         android:background="@drawable/fondo_boton_primario"
         android:minHeight="0dp"
         android:textAllCaps="false" />
