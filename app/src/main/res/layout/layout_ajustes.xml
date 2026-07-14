@@ -8,7 +8,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Ajustes"
+        android:text="@string/ajustes"
         android:textSize="24sp"
         android:textStyle="bold"
         android:layout_marginBottom="24dp" />
@@ -24,7 +24,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="APARIENCIA"
+            android:text="@string/apariencia_mayuscula"
             android:textSize="12sp"
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
@@ -39,7 +39,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Modo oscuro"
+            android:text="@string/modo_oscuro"
                 android:textSize="16sp" />
 
             <androidx.appcompat.widget.SwitchCompat

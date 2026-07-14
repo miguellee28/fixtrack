@@ -17,7 +17,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Detalle del dispositivo"
+            android:text="@string/detalle_dispositivo"
             android:fontFamily="sans-serif-medium"
             android:letterSpacing="-0.02"
             android:textColor="@color/text_primary"
@@ -38,6 +38,7 @@
                 android:id="@+id/foto_dispositivo"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:contentDescription="@string/foto_dispositivo"
                 android:scaleType="centerCrop" />
 
             <TextView
@@ -45,7 +46,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Foto"
+                android:text="@string/foto"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -65,13 +66,15 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="NOMBRE DEL DISPOSITIVO"
+                android:labelFor="@id/campo_nombre"
+                android:text="@string/nombre_dispositivo_mayuscula"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="2dp" />
 
             <EditText
                 android:id="@+id/campo_nombre"
+                android:importantForAutofill="no"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:background="@drawable/fondo_input_nota"
@@ -87,7 +90,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="CATEGORÍA"
+                android:text="@string/categoria_mayuscula"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="2dp" />
@@ -106,13 +109,15 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="MARCA"
+                android:labelFor="@id/campo_marca"
+                android:text="@string/marca_mayuscula"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="2dp" />
 
             <EditText
                 android:id="@+id/campo_marca"
+                android:importantForAutofill="no"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:background="@drawable/fondo_input_nota"
@@ -128,13 +133,15 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="MODELO"
+                android:labelFor="@id/campo_modelo"
+                android:text="@string/modelo_mayuscula"
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="2dp" />
 
             <EditText
                 android:id="@+id/campo_modelo"
+                android:importantForAutofill="no"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:background="@drawable/fondo_input_nota"
@@ -162,7 +169,7 @@
                 android:id="@+id/texto_titulo_resumen_ia"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Resumen de IA"
+                android:text="@string/resumen_ia"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="6dp" />
@@ -171,7 +178,7 @@
                 android:id="@+id/texto_resumen_ia"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Analizando inspecciones..."
+                android:text="@string/analizando_inspecciones"
                 android:textSize="14sp"
                 android:textColor="#555555" />
 
@@ -189,7 +196,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Calendario del dispositivo"
+                    android:text="@string/calendario_dispositivo"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -204,7 +211,7 @@
                 android:minWidth="72dp"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
-                android:text="Editar"
+                    android:text="@string/editar"
                 android:textColor="@color/purple_500"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -221,7 +228,7 @@
             android:id="@+id/boton_guardar"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:text="Guardar cambios"
+                android:text="@string/guardar_cambios"
             android:minHeight="0dp"
             android:textAllCaps="false"
             android:layout_marginTop="16dp" />
@@ -230,7 +237,7 @@
             android:id="@+id/boton_eliminar_dispositivo"
             android:layout_width="match_parent"
             android:layout_height="44dp"
-            android:text="Eliminar dispositivo"
+                android:text="@string/eliminar_dispositivo"
             android:background="@android:color/transparent"
             android:textAllCaps="false"
             android:minHeight="0dp"

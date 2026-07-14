@@ -87,16 +87,21 @@ class GoogleGenAiClient(
                 setRequestProperty("x-goog-api-key", apiKey)
             }
 
-            OutputStreamWriter(connection.outputStream).use { it.write(body.toString()) }
-            val responseText = readResponse(connection)
-            if (connection.responseCode in 200..299) {
-                return responseText
-            }
+            try {
+                OutputStreamWriter(connection.outputStream).use { it.write(body.toString()) }
+                val responseCode = connection.responseCode
+                val responseText = readResponse(connection, responseCode)
+                if (responseCode in 200..299) {
+                    return responseText
+                }
 
-            lastCode = connection.responseCode
-            lastError = responseText
-            if (connection.responseCode !in setOf(429, 500, 503) || attempt == 2) {
-                throw IllegalStateException("Gemma respondio con error ${connection.responseCode}: $responseText")
+                lastCode = responseCode
+                lastError = responseText
+                if (responseCode !in setOf(429, 500, 503) || attempt == 2) {
+                    throw IllegalStateException("Gemma respondio con error $responseCode: $responseText")
+                }
+            } finally {
+                connection.disconnect()
             }
             Thread.sleep(1200L * (attempt + 1))
         }
@@ -147,29 +152,34 @@ class BraveSearchClient(private val apiKey: String) {
             setRequestProperty("X-Subscription-Token", apiKey)
         }
 
-        val responseText = readResponse(connection)
-        if (connection.responseCode !in 200..299) {
-            throw IllegalStateException("Brave respondio con error ${connection.responseCode}: $responseText")
-        }
+        try {
+            val responseCode = connection.responseCode
+            val responseText = readResponse(connection, responseCode)
+            if (responseCode !in 200..299) {
+                throw IllegalStateException("Brave respondio con error $responseCode: $responseText")
+            }
 
-        val results = JSONObject(responseText)
-            .optJSONObject("web")
-            ?.optJSONArray("results")
-            ?: JSONArray()
-        val parsed = mutableListOf<BraveSearchResult>()
-        for (i in 0 until results.length()) {
-            val item = results.optJSONObject(i) ?: continue
-            val url = item.optString("url")
-            if (url.isBlank()) continue
-            parsed.add(
-                BraveSearchResult(
-                    title = item.optString("title"),
-                    url = url,
-                    description = item.optString("description")
+            val results = JSONObject(responseText)
+                .optJSONObject("web")
+                ?.optJSONArray("results")
+                ?: JSONArray()
+            val parsed = mutableListOf<BraveSearchResult>()
+            for (i in 0 until results.length()) {
+                val item = results.optJSONObject(i) ?: continue
+                val url = item.optString("url")
+                if (url.isBlank()) continue
+                parsed.add(
+                    BraveSearchResult(
+                        title = item.optString("title"),
+                        url = url,
+                        description = item.optString("description")
+                    )
                 )
-            )
+            }
+            return parsed
+        } finally {
+            connection.disconnect()
         }
-        return parsed
     }
 }
 
@@ -200,6 +210,7 @@ class MaintenanceAiService(
             modelo=${dispositivo.modelo}
 
             Inspecciones:
+            total=${inspecciones.size}
             $inspeccionesTexto
 
             Devuelve solo JSON valido con esta forma:
@@ -211,6 +222,7 @@ class MaintenanceAiService(
             - Si todos los estados estan en bueno, di que todo funciona correctamente y menciona que debe continuar con mantenimiento preventivo.
             - Si hay regular, explica que debe vigilarse y que accion concreta revisar.
             - Si hay malo, indica prioridad alta y que debe atenderse pronto.
+            - Si mencionas una cantidad de inspecciones, usa exactamente el valor total indicado.
             - Usa lenguaje simple, maximo 4 oraciones.
             - No inventes piezas especificas si no aparecen en inspecciones/notas.
         """.trimIndent()
@@ -517,8 +529,8 @@ class MaintenanceAiService(
     }
 }
 
-private fun readResponse(connection: HttpURLConnection): String {
-    val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+private fun readResponse(connection: HttpURLConnection, responseCode: Int): String {
+    val stream = if (responseCode in 200..299) connection.inputStream else connection.errorStream
     return BufferedReader(InputStreamReader(stream ?: connection.inputStream)).use { reader ->
         buildString {
             var line = reader.readLine()

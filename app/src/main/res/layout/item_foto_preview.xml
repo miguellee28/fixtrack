@@ -9,6 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@drawable/fondo_foto_redondeada"
+        android:contentDescription="@string/foto_adjunta"
         android:scaleType="centerCrop" />
 
     <ImageButton
@@ -18,7 +19,7 @@
         android:layout_gravity="top|end"
         android:background="#80000000"
         android:src="@android:drawable/ic_menu_close_clear_cancel"
-        android:contentDescription="Eliminar foto"
+        android:contentDescription="@string/eliminar_foto"
         android:scaleType="centerInside"
         android:layout_margin="2dp" />
 

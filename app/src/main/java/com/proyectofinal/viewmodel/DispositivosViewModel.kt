@@ -21,12 +21,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
     private val _dispositivos = MutableStateFlow<List<Dispositivo>>(emptyList())
     val dispositivos: StateFlow<List<Dispositivo>> = _dispositivos.asStateFlow()
 
-    private val _tareas = MutableStateFlow<List<Tarea>>(emptyList())
-    val tareas: StateFlow<List<Tarea>> = _tareas.asStateFlow()
-
-    private val _inspecciones = MutableStateFlow<List<Inspeccion>>(emptyList())
-    val inspecciones: StateFlow<List<Inspeccion>> = _inspecciones.asStateFlow()
-
     private val _tareasPasadas = MutableStateFlow<List<ItemProgramado>>(emptyList())
     val tareasPasadas: StateFlow<List<ItemProgramado>> = _tareasPasadas.asStateFlow()
 
@@ -60,15 +54,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun insertarDispositivo(dispositivo: Dispositivo) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.insertar(dispositivo)
-            }
-            cargarDispositivos()
-        }
-    }
-
     suspend fun actualizarDispositivo(dispositivo: Dispositivo) {
         withContext(Dispatchers.IO) {
             repository.actualizar(dispositivo)
@@ -88,35 +73,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // ==================== TAREAS ====================
-
-    fun cargarTareas() {
-        viewModelScope.launch {
-            val datos = withContext(Dispatchers.IO) {
-                repository.obtenerTareas()
-            }
-            _tareas.value = datos
-        }
-    }
-
-    suspend fun insertarTarea(tarea: Tarea) {
-        withContext(Dispatchers.IO) {
-            repository.insertarTarea(tarea)
-        }
-        reprogramarNotificaciones()
-        cargarTareas()
-    }
-
-    fun eliminarTarea(id: Long) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.eliminarTarea(id)
-            }
-            reprogramarNotificaciones()
-            cargarTareas()
-        }
-    }
-
     suspend fun marcarTareaCompletada(id: Long) {
         withContext(Dispatchers.IO) {
             repository.marcarTareaCompletada(id)
@@ -126,41 +82,17 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         cargarCalendarioData()
     }
 
-    // ==================== INSPECCIONES ====================
-
-    fun cargarInspecciones() {
-        viewModelScope.launch {
-            val datos = withContext(Dispatchers.IO) {
-                repository.obtenerInspecciones()
-            }
-            _inspecciones.value = datos
-        }
-    }
-
-    suspend fun insertarInspeccion(inspeccion: Inspeccion) {
+    suspend fun completarInspeccion(
+        id: Long,
+        condicion: String,
+        notas: String,
+        fotos: List<String>,
+        fechaCompletada: String
+    ) {
         withContext(Dispatchers.IO) {
-            repository.insertarInspeccion(inspeccion)
+            repository.completarInspeccion(id, condicion, notas, fotos, fechaCompletada)
         }
         reprogramarNotificaciones()
-        cargarInspecciones()
-    }
-
-    fun eliminarInspeccion(id: Long) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.eliminarInspeccion(id)
-            }
-            reprogramarNotificaciones()
-            cargarInspecciones()
-        }
-    }
-
-    suspend fun marcarInspeccionCompletada(id: Long) {
-        withContext(Dispatchers.IO) {
-            repository.marcarInspeccionCompletada(id)
-        }
-        reprogramarNotificaciones()
-        cargarInspecciones()
         cargarHomeData()
         cargarCalendarioData()
     }
@@ -210,14 +142,6 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     // ==================== TAREA DETALLES ====================
 
-    fun insertarTareaDetalle(detalle: TareaDetalle) {
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.insertarTareaDetalle(detalle)
-            }
-        }
-    }
-
     fun cargarDetallesPorTarea(tareaId: Long): List<TareaDetalle> {
         return repository.obtenerDetallesPorTarea(tareaId)
     }
@@ -230,27 +154,19 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     // ==================== GUARDAR TODO ====================
 
-    suspend fun guardarDispositivoConTareaEInspeccion(
+    suspend fun guardarDispositivoConCalendario(
         dispositivo: Dispositivo,
-        tarea: Tarea?,
-        inspeccion: Inspeccion?
+        tareas: List<Tarea>,
+        inspecciones: List<Inspeccion>
     ): Long {
-        val id = withContext(Dispatchers.IO) {
-            repository.insertar(dispositivo)
-        }
-        if (tarea != null) {
-            withContext(Dispatchers.IO) {
-                repository.insertarTarea(tarea.copy(dispositivoId = id))
-            }
-        }
-        if (inspeccion != null) {
-            withContext(Dispatchers.IO) {
-                repository.insertarInspeccion(inspeccion.copy(dispositivoId = id))
-            }
+        val dispositivoId = withContext(Dispatchers.IO) {
+            repository.guardarDispositivoConCalendario(dispositivo, tareas, inspecciones)
         }
         reprogramarNotificaciones()
+        cargarHomeData()
+        cargarCalendarioData()
         cargarDispositivos()
-        return id
+        return dispositivoId
     }
 
     suspend fun guardarTareasEInspecciones(
@@ -259,24 +175,10 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         inspecciones: List<Inspeccion>
     ) {
         val idDispositivo = dispositivoId ?: 0
-        val inspeccionesGuardadas = inspecciones.map { it.copy(dispositivoId = idDispositivo) }
-
         withContext(Dispatchers.IO) {
-            for (inspeccion in inspeccionesGuardadas) {
-                repository.insertarInspeccion(inspeccion)
-            }
-
-            for (tarea in tareas) {
-                val tareaGuardada = tarea.copy(dispositivoId = idDispositivo)
-                val tareaId = repository.insertarTarea(tareaGuardada)
-                val inspeccionesParaTarea = inspeccionesGuardadas.filter { it.fecha == tareaGuardada.fecha }
-                    .ifEmpty { if (tareas.size == 1) inspeccionesGuardadas else emptyList() }
-                repository.vincularInspeccionesATarea(tareaId, inspeccionesParaTarea)
-            }
+            repository.guardarCalendario(idDispositivo, tareas, inspecciones)
         }
         reprogramarNotificaciones()
-        cargarTareas()
-        cargarInspecciones()
         cargarHomeData()
         cargarCalendarioData()
         cargarDispositivos()
@@ -285,35 +187,20 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun guardarEdicionCalendario(
         dispositivoId: Long,
         tareas: List<Tarea>,
-        inspecciones: List<Inspeccion>
+        inspecciones: List<Inspeccion>,
+        tareasEliminadas: Set<Long> = emptySet(),
+        inspeccionesEliminadas: Set<Long> = emptySet()
     ) {
-        val tareasGuardadas = tareas.map { it.copy(dispositivoId = dispositivoId) }
-        val inspeccionesGuardadas = inspecciones.map { it.copy(dispositivoId = dispositivoId) }
-
         withContext(Dispatchers.IO) {
-            for (inspeccion in inspeccionesGuardadas) {
-                if (inspeccion.id > 0) {
-                    repository.actualizarInspeccion(inspeccion)
-                } else {
-                    repository.insertarInspeccion(inspeccion)
-                }
-            }
-
-            for (tarea in tareasGuardadas) {
-                val tareaGuardada = if (tarea.id > 0) {
-                    repository.actualizarTarea(tarea)
-                    tarea
-                } else {
-                    tarea.copy(id = repository.insertarTarea(tarea))
-                }
-                val inspeccionesParaTarea = inspeccionesGuardadas.filter { it.fecha == tareaGuardada.fecha }
-                    .ifEmpty { if (tareasGuardadas.size == 1) inspeccionesGuardadas else emptyList() }
-                repository.sincronizarDetallesDeTarea(tareaGuardada, inspeccionesParaTarea)
-            }
+            repository.guardarEdicionCalendario(
+                dispositivoId,
+                tareas,
+                inspecciones,
+                tareasEliminadas,
+                inspeccionesEliminadas
+            )
         }
         reprogramarNotificaciones()
-        cargarTareas()
-        cargarInspecciones()
         cargarHomeData()
         cargarCalendarioData()
         cargarDispositivos()
@@ -335,5 +222,11 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     fun obtenerTodasInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> {
         return repository.obtenerTodasInspeccionesPorDispositivo(dispositivoId)
+    }
+
+    suspend fun obtenerInspeccionPorId(id: Long): Inspeccion? {
+        return withContext(Dispatchers.IO) {
+            repository.obtenerInspeccionPorId(id)
+        }
     }
 }

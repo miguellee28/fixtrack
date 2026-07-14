@@ -12,7 +12,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="INSPECCION"
+        android:text="@string/inspeccion_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:textColor="@color/green_good"
@@ -29,7 +29,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="DESCRIPCION"
+        android:text="@string/descripcion_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="2dp" />
@@ -44,7 +44,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="CONDICION"
+        android:text="@string/condicion_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginBottom="8dp" />
@@ -68,7 +68,7 @@
             android:minWidth="0dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
-            android:text="Bueno"
+            android:text="@string/bueno"
             android:textAllCaps="false"
             android:textSize="12sp"
             android:maxLines="1"
@@ -87,7 +87,7 @@
             android:minWidth="0dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
-            android:text="Regular"
+            android:text="@string/regular"
             android:textAllCaps="false"
             android:textSize="12sp"
             android:maxLines="1"
@@ -105,7 +105,7 @@
             android:minWidth="0dp"
             android:paddingTop="0dp"
             android:paddingBottom="0dp"
-            android:text="Malo"
+            android:text="@string/malo"
             android:textAllCaps="false"
             android:textSize="12sp"
             android:maxLines="1"
@@ -117,7 +117,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="NOTAS"
+        android:text="@string/notas_mayuscula"
         android:textSize="12sp"
         android:textStyle="bold"
         android:layout_marginTop="12dp"
@@ -125,11 +125,12 @@
 
     <EditText
         android:id="@+id/campo_notas_inspeccion"
+        android:importantForAutofill="no"
         android:layout_width="match_parent"
         android:layout_height="88dp"
         android:background="@drawable/fondo_input_nota"
         android:includeFontPadding="false"
-        android:hint="Escribe notas adicionales..."
+        android:hint="@string/escribe_notas"
         android:inputType="textMultiLine"
         android:gravity="top|start"
         android:minHeight="0dp"
