@@ -210,6 +210,7 @@ class MaintenanceAiService(
             modelo=${dispositivo.modelo}
 
             Inspecciones:
+            total=${inspecciones.size}
             $inspeccionesTexto
 
             Devuelve solo JSON valido con esta forma:
@@ -221,6 +222,7 @@ class MaintenanceAiService(
             - Si todos los estados estan en bueno, di que todo funciona correctamente y menciona que debe continuar con mantenimiento preventivo.
             - Si hay regular, explica que debe vigilarse y que accion concreta revisar.
             - Si hay malo, indica prioridad alta y que debe atenderse pronto.
+            - Si mencionas una cantidad de inspecciones, usa exactamente el valor total indicado.
             - Usa lenguaje simple, maximo 4 oraciones.
             - No inventes piezas especificas si no aparecen en inspecciones/notas.
         """.trimIndent()

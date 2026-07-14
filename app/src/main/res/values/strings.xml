@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Proyecto Final</string>
+    <string name="app_name">Fixtrack</string>
     <string name="foto_dispositivo">Foto del dispositivo</string>
     <string name="foto_adjunta">Foto adjunta</string>
     <string name="agregar_dispositivo">Agregar Dispositivo</string>

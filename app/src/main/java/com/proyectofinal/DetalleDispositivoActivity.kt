@@ -223,26 +223,16 @@ class DetalleDispositivoActivity : AppCompatActivity() {
             val dispositivo = dispositivoActual()
             val detalles = withContext(Dispatchers.IO) {
                 val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId)
-                    .flatMap { tarea -> viewModel.cargarDetallesPorTarea(tarea.id) }
-                val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId)
-                    .filter { it.condicion.isNotBlank() || it.notas.isNotBlank() }
-                    .map {
-                        TareaDetalle(
-                            id = it.id,
-                            tareaId = 0,
-                            tipo = "inspeccion",
-                            nombre = it.nombre,
-                            descripcion = it.descripcion,
-                            condicion = it.condicion,
-                            notas = it.notas,
-                            fotos = it.fotos,
-                            completada = it.completada,
-                            fechaCompletada = it.fechaCompletada
-                        )
+                    .flatMap { tarea ->
+                        viewModel.cargarDetallesPorTarea(tarea.id).map { detalle ->
+                            DetalleInspeccionProgramada(detalle, tarea.fecha)
+                        }
                     }
-                (detallesDeTareas + inspeccionesIndependientes).distinctBy {
-                    "${it.tareaId}:${it.tipo}:${it.id}:${it.nombre}:${it.fechaCompletada}"
-                }
+                val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId)
+                InspectionSummaryUtils.combinarInspeccionesUnicas(
+                    detallesDeTareas,
+                    inspeccionesIndependientes
+                )
             }
             val inspeccionesConEstado = detalles.filter {
                 it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())

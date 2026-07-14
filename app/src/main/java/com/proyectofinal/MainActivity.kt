@@ -463,25 +463,16 @@ class MainActivity : AppCompatActivity() {
 
         for (dispositivo in dispositivos) {
             val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivo.id)
-                .flatMap { tarea -> viewModel.cargarDetallesPorTarea(tarea.id) }
-                .filter { it.tipo == "inspeccion" && it.condicion.isNotBlank() }
-            val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivo.id)
-                .filter { it.condicion.isNotBlank() }
-                .map {
-                    TareaDetalle(
-                        id = it.id,
-                        tareaId = 0,
-                        tipo = "inspeccion",
-                        nombre = it.nombre,
-                        descripcion = it.descripcion,
-                        condicion = it.condicion,
-                        notas = it.notas,
-                        fotos = it.fotos,
-                        completada = it.completada,
-                        fechaCompletada = it.fechaCompletada
-                    )
+                .flatMap { tarea ->
+                    viewModel.cargarDetallesPorTarea(tarea.id).map { detalle ->
+                        DetalleInspeccionProgramada(detalle, tarea.fecha)
+                    }
                 }
-            val detalles = detallesDeTareas + inspeccionesIndependientes
+            val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivo.id)
+            val detalles = InspectionSummaryUtils.combinarInspeccionesUnicas(
+                detallesDeTareas,
+                inspeccionesIndependientes
+            ).filter { it.condicion.isNotBlank() }
 
             inspeccionesConEstado += detalles.size
             malas += detalles.count { it.condicion == "malo" }

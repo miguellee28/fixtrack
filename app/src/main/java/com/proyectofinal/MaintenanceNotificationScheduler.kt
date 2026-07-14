@@ -55,7 +55,7 @@ object MaintenanceNotificationScheduler {
         deviceName: String,
         date: String
     ) {
-        val triggerAtMillis = triggerAtEight(date, type) ?: return
+        val triggerAtMillis = triggerAtEight(date) ?: return
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -72,14 +72,14 @@ object MaintenanceNotificationScheduler {
         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
     }
 
-    private fun triggerAtEight(date: String, type: String): Long? {
+    private fun triggerAtEight(date: String): Long? {
         val localDate = runCatching { LocalDate.parse(date) }.getOrNull() ?: return null
         val triggerAtMillis = localDate
             .atTime(LocalTime.of(8, 0))
             .atZone(ZoneId.systemDefault())
             .toInstant()
             .toEpochMilli()
-        if (triggerAtMillis <= System.currentTimeMillis() && type == TYPE_TASK) {
+        if (triggerAtMillis <= System.currentTimeMillis()) {
             return nextEightInTheMorning()
         }
         return triggerAtMillis.takeIf { it > System.currentTimeMillis() }

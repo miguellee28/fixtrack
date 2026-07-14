@@ -38,9 +38,9 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
         if (id <= 0L || type.isBlank()) return
 
         val item = findPendingItem(context, id, type) ?: return
-        val isOverdueTask = type == MaintenanceNotificationScheduler.TYPE_TASK && isOverdue(item.fecha)
+        val isOverdueItem = isOverdue(item.fecha)
         if (!canPostNotifications(context)) {
-            if (isOverdueTask) {
+            if (isOverdueItem) {
                 MaintenanceNotificationScheduler.scheduleAll(context)
             }
             return
@@ -49,7 +49,8 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
         createChannel(context)
         val isTask = type == MaintenanceNotificationScheduler.TYPE_TASK
         val title = when {
-            isOverdueTask -> "Mantenimiento atrasado"
+            isOverdueItem && isTask -> "Mantenimiento atrasado"
+            isOverdueItem -> "Inspeccion atrasada"
             isTask -> "Mantenimiento hoy"
             else -> "Inspeccion hoy"
         }
@@ -86,7 +87,7 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
         } catch (_: SecurityException) {
             return
         }
-        if (isOverdueTask) {
+        if (isOverdueItem) {
             MaintenanceNotificationScheduler.scheduleAll(context)
         }
     }
