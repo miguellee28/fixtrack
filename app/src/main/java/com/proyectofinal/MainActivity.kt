@@ -284,7 +284,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun agruparPorFechaYDispositivo(items: List<ItemProgramado>): List<List<ItemProgramado>> {
-        return items.groupBy { Pair(it.fecha, it.nombreDispositivo.ifBlank { "Sin dispositivo" }) }.values.toList()
+        return items.groupBy { it.id }.values.toList()
     }
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
@@ -321,7 +321,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resumenGrupo(grupo: List<ItemProgramado>): String {
         return itemsVisiblesGrupo(grupo).joinToString(separator = "\n") { item ->
-            val tipo = if (item.tipo == "tarea") "Mantenimiento" else "Inspeccion"
+            val tipo = if (item.tipo == "mantenimiento") "Mantenimiento" else "Inspeccion"
             "$tipo: ${item.nombre}"
         }
     }
@@ -336,20 +336,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun abrirDetalleGrupo(grupo: List<ItemProgramado>, soloLectura: Boolean = false) {
-        val tareas = grupo.filter { it.tipo == "tarea" }
-        if (tareas.isNotEmpty()) {
-            val primera = tareas.first()
-            val intent = Intent(this, TareaDetalleActivity::class.java).apply {
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, primera.id)
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_IDS, tareas.map { it.id }.toLongArray())
-                putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
-                putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
-            }
-            resultadoTareaDetalle.launch(intent)
-        } else {
-            abrirDetalleInspeccion(grupo.first(), soloLectura)
+        val primera = grupo.firstOrNull() ?: return
+        val intent = Intent(this, TareaDetalleActivity::class.java).apply {
+            putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, primera.id)
+            putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
+            putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
+            putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
         }
+        resultadoTareaDetalle.launch(intent)
     }
 
     private fun cargarPreferencias() {
@@ -462,17 +456,7 @@ class MainActivity : AppCompatActivity() {
         val dispositivosConAlerta = mutableSetOf<String>()
 
         for (dispositivo in dispositivos) {
-            val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivo.id)
-                .flatMap { tarea ->
-                    viewModel.cargarDetallesPorTarea(tarea.id).map { detalle ->
-                        DetalleInspeccionProgramada(detalle, tarea.fecha)
-                    }
-                }
-            val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivo.id)
-            val detalles = InspectionSummaryUtils.combinarInspeccionesUnicas(
-                detallesDeTareas,
-                inspeccionesIndependientes
-            ).filter { it.condicion.isNotBlank() }
+            val detalles = viewModel.obtenerResultadosInspeccionPorDispositivo(dispositivo.id)
 
             inspeccionesConEstado += detalles.size
             malas += detalles.count { it.condicion == "malo" }
@@ -582,18 +566,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun abrirDetalleInspeccion(item: ItemProgramado, soloLectura: Boolean) {
-        val intent = Intent(this, TareaDetalleActivity::class.java).apply {
-            putExtra(TareaDetalleActivity.EXTRA_INSPECCION_ID, item.id)
-            putExtra(TareaDetalleActivity.EXTRA_INSPECCION_NOMBRE, item.nombre)
-            putExtra(TareaDetalleActivity.EXTRA_INSPECCION_DESCRIPCION, item.descripcion)
-            putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, item.nombreDispositivo)
-            putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, item.fecha)
-            putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
-        }
-        resultadoTareaDetalle.launch(intent)
-    }
-
     private fun configurarAjustes() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val switchOscuro = contenedorPantallas.findViewById<SwitchCompat>(R.id.switch_modo_oscuro)
@@ -671,7 +643,7 @@ class MainActivity : AppCompatActivity() {
     ) : BaseAdapter() {
 
         private val grupos = items
-            .groupBy { Pair(it.fecha, it.nombreDispositivo.ifBlank { "Sin dispositivo" }) }
+            .groupBy { it.id }
             .values
             .toList()
 
@@ -703,7 +675,7 @@ class MainActivity : AppCompatActivity() {
 
         private fun resumenGrupoCalendario(grupo: List<ItemProgramado>): String {
             return itemsVisiblesGrupoCalendario(grupo).joinToString(separator = "\n") { item ->
-                val tipo = if (item.tipo == "tarea") "Mantenimiento" else "Inspeccion"
+                val tipo = if (item.tipo == "mantenimiento") "Mantenimiento" else "Inspeccion"
                 "$tipo: ${item.nombre}"
             }
         }

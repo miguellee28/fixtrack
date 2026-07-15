@@ -179,7 +179,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
     private fun cargarCalendarioDispositivo() {
         lifecycleScope.launch {
             val items = withContext(Dispatchers.IO) {
-                val tareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId).map {
+                val tareas = viewModel.obtenerMantenimientosPorDispositivo(dispositivoId).map {
                     ItemCalendarioDispositivo(
                         tipo = "Mantenimiento",
                         nombre = it.nombre,
@@ -187,7 +187,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
                         repetirCada = it.repetirCada
                     )
                 }
-                val inspecciones = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId).map {
+                val inspecciones = viewModel.obtenerInspeccionesPorDispositivo(dispositivoId).map {
                     ItemCalendarioDispositivo(
                         tipo = "Inspeccion",
                         nombre = it.nombre,
@@ -222,17 +222,7 @@ class DetalleDispositivoActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val dispositivo = dispositivoActual()
             val detalles = withContext(Dispatchers.IO) {
-                val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivoId)
-                    .flatMap { tarea ->
-                        viewModel.cargarDetallesPorTarea(tarea.id).map { detalle ->
-                            DetalleInspeccionProgramada(detalle, tarea.fecha)
-                        }
-                    }
-                val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivoId)
-                InspectionSummaryUtils.combinarInspeccionesUnicas(
-                    detallesDeTareas,
-                    inspeccionesIndependientes
-                )
+                viewModel.obtenerResultadosInspeccionPorDispositivo(dispositivoId)
             }
             val inspeccionesConEstado = detalles.filter {
                 it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())

@@ -21,7 +21,7 @@ data class AiSource(
 
 data class AiMaintenanceResult(
     val dispositivo: Dispositivo,
-    val tareas: List<Tarea>,
+    val mantenimientos: List<Mantenimiento>,
     val inspecciones: List<Inspeccion>,
     val fuentes: List<AiSource>
 )
@@ -189,7 +189,7 @@ class MaintenanceAiService(
 ) {
     fun generateInspectionFeedback(
         dispositivo: Dispositivo,
-        detalles: List<TareaDetalle>
+        detalles: List<TareaItem>
     ): String {
         val inspecciones = detalles.filter { it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank()) }
         if (inspecciones.isEmpty()) {
@@ -197,7 +197,7 @@ class MaintenanceAiService(
         }
 
         val inspeccionesTexto = inspecciones.joinToString("\n") { detalle ->
-            "- ${detalle.nombre}: estado=${detalle.condicion.ifBlank { "sin estado" }}, notas=${detalle.notas.ifBlank { "sin notas" }}, fecha=${detalle.fechaCompletada ?: "sin fecha"}"
+            "- ${detalle.nombre}: estado=${detalle.condicion.ifBlank { "sin estado" }}, notas=${detalle.notas.ifBlank { "sin notas" }}"
         }
 
         val prompt = """
@@ -388,7 +388,7 @@ class MaintenanceAiService(
         )
         return AiMaintenanceResult(
             dispositivo = parsedDevice,
-            tareas = parseTareas(json.optJSONArray("mantenimientos"), today),
+            mantenimientos = parseMantenimientos(json.optJSONArray("mantenimientos"), today),
             inspecciones = parseInspecciones(json.optJSONArray("inspecciones"), today),
             fuentes = parseSources(json.optJSONArray("fuentes")).ifEmpty {
                 searchResults.take(5).map { AiSource(it.title, it.url) }
@@ -407,9 +407,9 @@ class MaintenanceAiService(
         ).distinct()
     }
 
-    private fun parseTareas(items: JSONArray?, defaultDate: String): List<Tarea> {
+    private fun parseMantenimientos(items: JSONArray?, defaultDate: String): List<Mantenimiento> {
         return parseScheduledItems(items).map {
-            Tarea(
+            Mantenimiento(
                 nombre = it.nombre,
                 descripcion = it.descripcion,
                 fecha = it.fecha.ifBlank { defaultDate },
@@ -513,7 +513,7 @@ class MaintenanceAiService(
     }
 
     companion object {
-        fun generarFeedbackLocal(detalles: List<TareaDetalle>): String {
+        fun generarFeedbackLocal(detalles: List<TareaItem>): String {
             val inspecciones = detalles.filter { it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank()) }
             if (inspecciones.isEmpty()) {
                 return "Aun no hay inspecciones completadas con estado. Completa una inspeccion para recibir feedback."

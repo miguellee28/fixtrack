@@ -42,7 +42,7 @@ class AgregarTareaActivity : AppCompatActivity() {
 
     private var dispositivosDisponibles: List<Dispositivo> = emptyList()
     private var dispositivoInicialId: Long = 0
-    private val tareasEliminadas = mutableSetOf<Long>()
+    private val mantenimientosEliminados = mutableSetOf<Long>()
     private val inspeccionesEliminadas = mutableSetOf<Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,7 +160,7 @@ class AgregarTareaActivity : AppCompatActivity() {
         contenedorTarjetas.addView(vista)
     }
 
-    private fun agregarTarjetaTarea(tarea: Tarea) {
+    private fun agregarTarjetaTarea(tarea: Mantenimiento) {
         val vista = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
         configurarCalendarioTarea(vista, tarea.fecha)
         vista.findViewById<EditText>(R.id.campo_nombre_tarea)?.setText(tarea.nombre)
@@ -190,7 +190,7 @@ class AgregarTareaActivity : AppCompatActivity() {
     }
 
     private fun mostrarTarjetasVacias() {
-        tareasEliminadas.clear()
+        mantenimientosEliminados.clear()
         inspeccionesEliminadas.clear()
         contenedorTarjetas.removeAllViews()
         agregarTarjetaTarea()
@@ -198,12 +198,12 @@ class AgregarTareaActivity : AppCompatActivity() {
     }
 
     private fun cargarTarjetasDelDispositivo(dispositivoId: Long) {
-        tareasEliminadas.clear()
+        mantenimientosEliminados.clear()
         inspeccionesEliminadas.clear()
         lifecycleScope.launch {
-            val (tareas, inspecciones) = withContext(Dispatchers.IO) {
+            val (mantenimientos, inspecciones) = withContext(Dispatchers.IO) {
                 Pair(
-                    viewModel.obtenerTareasPorDispositivo(dispositivoId),
+                    viewModel.obtenerMantenimientosPorDispositivo(dispositivoId),
                     viewModel.obtenerInspeccionesPorDispositivo(dispositivoId)
                 )
             }
@@ -213,13 +213,13 @@ class AgregarTareaActivity : AppCompatActivity() {
 
             contenedorTarjetas.removeAllViews()
 
-            if (tareas.isEmpty() && inspecciones.isEmpty()) {
+            if (mantenimientos.isEmpty() && inspecciones.isEmpty()) {
                 agregarTarjetaTarea()
                 agregarTarjetaInspeccion()
                 return@launch
             }
 
-            tareas.forEach { agregarTarjetaTarea(it) }
+            mantenimientos.forEach { agregarTarjetaTarea(it) }
             inspecciones.forEach { agregarTarjetaInspeccion(it) }
         }
     }
@@ -299,8 +299,8 @@ class AgregarTareaActivity : AppCompatActivity() {
         val boton = vista.findViewById<TextView>(R.id.boton_eliminar) ?: return
         boton.setOnClickListener {
             val tag = vista.tag
-            if (tag is Tarea && tag.id > 0) {
-                tareasEliminadas.add(tag.id)
+            if (tag is Mantenimiento && tag.id > 0) {
+                mantenimientosEliminados.add(tag.id)
             } else if (tag is Inspeccion && tag.id > 0) {
                 inspeccionesEliminadas.add(tag.id)
             }
@@ -315,7 +315,7 @@ class AgregarTareaActivity : AppCompatActivity() {
             null
         }
 
-        val tareas = mutableListOf<Tarea>()
+        val mantenimientos = mutableListOf<Mantenimiento>()
         val inspecciones = mutableListOf<Inspeccion>()
 
         for (i in 0 until contenedorTarjetas.childCount) {
@@ -325,17 +325,17 @@ class AgregarTareaActivity : AppCompatActivity() {
             if (nombreCampo != null) {
                 val nombre = nombreCampo.text.toString().trim()
                 if (nombre.isNotEmpty()) {
-                    val existente = vista.tag as? Tarea
+                    val existente = vista.tag as? Mantenimiento
                     val desc = vista.findViewById<EditText>(R.id.campo_descripcion)?.text.toString().trim()
                     val repetir = vista.findViewById<Spinner>(R.id.spinner_repetir)?.selectedItem?.toString() ?: "Una vez"
                     val fecha = vista.findViewById<TextView>(R.id.texto_fecha_tarea)?.text.toString()
-                    tareas.add(
+                    mantenimientos.add(
                         existente?.copy(
                             nombre = nombre,
                             descripcion = desc,
                             fecha = fecha,
                             repetirCada = repetir
-                        ) ?: Tarea(
+                        ) ?: Mantenimiento(
                             nombre = nombre,
                             descripcion = desc,
                             fecha = fecha,
@@ -370,27 +370,27 @@ class AgregarTareaActivity : AppCompatActivity() {
             }
         }
 
-        val hayEliminacionesPendientes = tareasEliminadas.isNotEmpty() || inspeccionesEliminadas.isNotEmpty()
-        if (tareas.isEmpty() && inspecciones.isEmpty() && !hayEliminacionesPendientes) {
+        val hayEliminacionesPendientes = mantenimientosEliminados.isNotEmpty() || inspeccionesEliminadas.isNotEmpty()
+        if (mantenimientos.isEmpty() && inspecciones.isEmpty() && !hayEliminacionesPendientes) {
             Toast.makeText(this, "Agrega al menos una tarea o inspeccion", Toast.LENGTH_SHORT).show()
             return
         }
 
         lifecycleScope.launch {
-            val hayItemsExistentes = tareas.any { it.id > 0 } ||
+            val hayItemsExistentes = mantenimientos.any { it.id > 0 } ||
                 inspecciones.any { it.id > 0 } ||
-                tareasEliminadas.isNotEmpty() ||
+                mantenimientosEliminados.isNotEmpty() ||
                 inspeccionesEliminadas.isNotEmpty()
             if (dispositivoId != null && hayItemsExistentes) {
                 viewModel.guardarEdicionCalendario(
                     dispositivoId,
-                    tareas,
+                    mantenimientos,
                     inspecciones,
-                    tareasEliminadas,
+                    mantenimientosEliminados,
                     inspeccionesEliminadas
                 )
             } else {
-                viewModel.guardarTareasEInspecciones(dispositivoId, tareas, inspecciones)
+                viewModel.guardarMantenimientosEInspecciones(dispositivoId, mantenimientos, inspecciones)
             }
             Toast.makeText(this@AgregarTareaActivity, "Guardado correctamente", Toast.LENGTH_SHORT).show()
             setResult(RESULT_OK)

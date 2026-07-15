@@ -1,570 +1,100 @@
 package com.proyectofinal.data
 
-// Fuente única de acceso a los datos de dispositivos y tareas.
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
 import com.proyectofinal.MaintenanceDateUtils
-import com.proyectofinal.model.*
+import com.proyectofinal.model.Dispositivo
+import com.proyectofinal.model.Inspeccion
+import com.proyectofinal.model.ItemProgramado
+import com.proyectofinal.model.Mantenimiento
+import com.proyectofinal.model.Tarea
+import com.proyectofinal.model.TareaFoto
+import com.proyectofinal.model.TareaItem
+import java.io.File
 import java.time.LocalDate
 
 class DispositivoRepository(context: Context) {
 
-    private val dbHelper = DatabaseHelper(context)
-
-    // ==================== DISPOSITIVOS ====================
+    private val appContext = context.applicationContext
+    private val dbHelper = DatabaseHelper(appContext)
 
     fun insertar(dispositivo: Dispositivo): Long {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_NOMBRE, dispositivo.nombre)
-            put(DatabaseHelper.COL_CATEGORIA, dispositivo.categoria)
-            put(DatabaseHelper.COL_MARCA, dispositivo.marca)
-            put(DatabaseHelper.COL_MODELO, dispositivo.modelo)
-            put(DatabaseHelper.COL_FOTO, dispositivo.foto)
-        }
-        val id = db.insert(DatabaseHelper.TABLE_DISPOSITIVOS, null, values)
-        return id
+        return dbHelper.writableDatabase.insert(
+            DatabaseHelper.TABLE_DISPOSITIVOS,
+            null,
+            valoresDispositivo(dispositivo)
+        )
     }
 
     fun obtenerTodos(): List<Dispositivo> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Dispositivo>()
-        val cursor = db.query(
+        val cursor = dbHelper.readableDatabase.query(
             DatabaseHelper.TABLE_DISPOSITIVOS,
             null, null, null, null, null,
             "${DatabaseHelper.COL_NOMBRE} ASC"
         )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(
-                    Dispositivo(
-                        id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_ID)),
-                        nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_NOMBRE)),
-                        categoria = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_CATEGORIA)),
-                        marca = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MARCA)),
-                        modelo = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MODELO)),
-                        foto = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_FOTO)) ?: ""
+        return cursor.use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add(
+                        Dispositivo(
+                            id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_ID)),
+                            nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_NOMBRE)),
+                            categoria = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_CATEGORIA)),
+                            marca = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MARCA)),
+                            modelo = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_MODELO)),
+                            foto = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_FOTO)).orEmpty()
+                        )
                     )
-                )
+                }
             }
         }
-        return lista
     }
 
     fun actualizar(dispositivo: Dispositivo): Int {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_NOMBRE, dispositivo.nombre)
-            put(DatabaseHelper.COL_CATEGORIA, dispositivo.categoria)
-            put(DatabaseHelper.COL_MARCA, dispositivo.marca)
-            put(DatabaseHelper.COL_MODELO, dispositivo.modelo)
-            put(DatabaseHelper.COL_FOTO, dispositivo.foto)
-        }
-        val filas = db.update(
+        return dbHelper.writableDatabase.update(
             DatabaseHelper.TABLE_DISPOSITIVOS,
-            values,
+            valoresDispositivo(dispositivo),
             "${DatabaseHelper.COL_ID} = ?",
             arrayOf(dispositivo.id.toString())
         )
-        return filas
     }
 
     fun eliminar(id: Long): Int {
-        val db = dbHelper.writableDatabase
-        db.beginTransaction()
-        try {
-            db.delete(
-                DatabaseHelper.TABLE_TAREA_DETALLES,
-                "${DatabaseHelper.COL_DETALLE_TAREA_ID} IN (SELECT ${DatabaseHelper.COL_TAREA_ID} FROM ${DatabaseHelper.TABLE_TAREAS} WHERE ${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?)",
-                arrayOf(id.toString())
-            )
-            db.delete(
-                DatabaseHelper.TABLE_TAREAS,
-                "${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?",
-                arrayOf(id.toString())
-            )
-            db.delete(
-                DatabaseHelper.TABLE_INSPECCIONES,
-                "${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ?",
-                arrayOf(id.toString())
-            )
-            val filas = db.delete(
-                DatabaseHelper.TABLE_DISPOSITIVOS,
-                "${DatabaseHelper.COL_ID} = ?",
-                arrayOf(id.toString())
-            )
-            db.setTransactionSuccessful()
-            return filas
-        } finally {
-            db.endTransaction()
-        }
-    }
-
-    // ==================== TAREAS ====================
-
-    fun insertarTarea(tarea: Tarea): Long {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_TAREA_NOMBRE, tarea.nombre)
-            put(DatabaseHelper.COL_TAREA_DESCRIPCION, tarea.descripcion)
-            put(DatabaseHelper.COL_TAREA_FECHA, tarea.fecha)
-            put(DatabaseHelper.COL_TAREA_REPETIR, tarea.repetirCada)
-            put(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID, tarea.dispositivoId)
-            put(DatabaseHelper.COL_TAREA_COMPLETADA, if (tarea.completada) 1 else 0)
-        }
-        val id = db.insert(DatabaseHelper.TABLE_TAREAS, null, values)
-        if (id > 0) {
-            insertarDetalleBaseDeTarea(id, tarea.nombre, tarea.descripcion)
-        }
-        return id
-    }
-
-    private fun insertarDetalleBaseDeTarea(tareaId: Long, nombre: String, descripcion: String): Long {
-        return insertarTareaDetalleSiNoExiste(
-            TareaDetalle(
-                tareaId = tareaId,
-                tipo = "mantenimiento",
-                nombre = nombre,
-                descripcion = descripcion
-            )
-        )
-    }
-
-    private fun insertarDetalleInspeccionParaTarea(tareaId: Long, inspeccion: Inspeccion): Long {
-        return insertarTareaDetalleSiNoExiste(
-            TareaDetalle(
-                tareaId = tareaId,
-                tipo = "inspeccion",
-                nombre = inspeccion.nombre,
-                descripcion = inspeccion.descripcion
-            )
-        )
-    }
-
-    private fun insertarTareaDetalleSiNoExiste(detalle: TareaDetalle): Long {
-        val db = dbHelper.writableDatabase
-        val cursor = db.query(
-            DatabaseHelper.TABLE_TAREA_DETALLES,
-            arrayOf(DatabaseHelper.COL_DETALLE_ID),
-            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ? AND ${DatabaseHelper.COL_DETALLE_TIPO} = ? AND ${DatabaseHelper.COL_DETALLE_NOMBRE} = ? AND ${DatabaseHelper.COL_DETALLE_DESCRIPCION} = ?",
-            arrayOf(detalle.tareaId.toString(), detalle.tipo, detalle.nombre, detalle.descripcion),
-            null, null, null
-        )
-        cursor.use { c ->
-            if (c.moveToFirst()) {
-                return c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_ID))
-            }
-        }
-
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_DETALLE_TAREA_ID, detalle.tareaId)
-            put(DatabaseHelper.COL_DETALLE_TIPO, detalle.tipo)
-            put(DatabaseHelper.COL_DETALLE_NOMBRE, detalle.nombre)
-            put(DatabaseHelper.COL_DETALLE_DESCRIPCION, detalle.descripcion)
-            put(DatabaseHelper.COL_DETALLE_CONDICION, detalle.condicion)
-            put(DatabaseHelper.COL_DETALLE_NOTAS, detalle.notas)
-            put(DatabaseHelper.COL_DETALLE_FOTOS, detalle.fotos.joinToString(","))
-            put(DatabaseHelper.COL_DETALLE_COMPLETADA, if (detalle.completada) 1 else 0)
-            put(DatabaseHelper.COL_DETALLE_FECHA_COMPLETADA, detalle.fechaCompletada)
-        }
-        return db.insert(DatabaseHelper.TABLE_TAREA_DETALLES, null, values)
-    }
-
-    fun vincularInspeccionesATarea(tareaId: Long, inspecciones: List<Inspeccion>) {
-        for (inspeccion in inspecciones) {
-            insertarDetalleInspeccionParaTarea(tareaId, inspeccion)
-        }
-    }
-
-    fun sincronizarDetallesDeTarea(tarea: Tarea, inspecciones: List<Inspeccion>) {
-        sincronizarDetalleMantenimiento(tarea)
-        reemplazarDetallesInspeccion(tarea.id, inspecciones)
-    }
-
-    private fun sincronizarDetalleMantenimiento(tarea: Tarea) {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_DETALLE_NOMBRE, tarea.nombre)
-            put(DatabaseHelper.COL_DETALLE_DESCRIPCION, tarea.descripcion)
-        }
-        val filas = db.update(
-            DatabaseHelper.TABLE_TAREA_DETALLES,
-            values,
-            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ? AND ${DatabaseHelper.COL_DETALLE_TIPO} = ?",
-            arrayOf(tarea.id.toString(), "mantenimiento")
-        )
-        if (filas == 0) {
-            insertarDetalleBaseDeTarea(tarea.id, tarea.nombre, tarea.descripcion)
-        }
-    }
-
-    private fun reemplazarDetallesInspeccion(tareaId: Long, inspecciones: List<Inspeccion>) {
-        val db = dbHelper.writableDatabase
-        db.delete(
-            DatabaseHelper.TABLE_TAREA_DETALLES,
-            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ? AND ${DatabaseHelper.COL_DETALLE_TIPO} = ?",
-            arrayOf(tareaId.toString(), "inspeccion")
-        )
-        for (inspeccion in inspecciones) {
-            insertarDetalleInspeccionParaTarea(tareaId, inspeccion)
-        }
-    }
-
-    fun obtenerTareas(): List<Tarea> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Tarea>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_TAREAS,
-            null, null, null, null, null,
-            "${DatabaseHelper.COL_TAREA_NOMBRE} ASC"
-        )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(
-                    Tarea(
-                        id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_ID)),
-                        nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_NOMBRE)),
-                        descripcion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DESCRIPCION)),
-                        fecha = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FECHA)),
-                        repetirCada = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_REPETIR)),
-                        dispositivoId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID)),
-                        completada = c.getInt(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_COMPLETADA)) == 1
-                    )
-                )
-            }
-        }
-        return lista
-    }
-
-    fun obtenerTareasPorDispositivo(dispositivoId: Long): List<Tarea> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Tarea>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_TAREAS,
-            null,
-            "${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ? AND ${DatabaseHelper.COL_TAREA_COMPLETADA} = 0",
-            arrayOf(dispositivoId.toString()),
-            null, null,
-            "${DatabaseHelper.COL_TAREA_FECHA} ASC"
-        )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(
-                    Tarea(
-                        id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_ID)),
-                        nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_NOMBRE)),
-                        descripcion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DESCRIPCION)),
-                        fecha = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FECHA)),
-                        repetirCada = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_REPETIR)),
-                        dispositivoId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID)),
-                        completada = c.getInt(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_COMPLETADA)) == 1
-                    )
-                )
-            }
-        }
-        return lista
-    }
-
-    fun obtenerTodasTareasPorDispositivo(dispositivoId: Long): List<Tarea> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Tarea>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_TAREAS,
-            null,
-            "${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?",
-            arrayOf(dispositivoId.toString()),
-            null, null,
-            "${DatabaseHelper.COL_TAREA_FECHA} ASC"
-        )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(
-                    Tarea(
-                        id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_ID)),
-                        nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_NOMBRE)),
-                        descripcion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DESCRIPCION)),
-                        fecha = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FECHA)),
-                        repetirCada = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_REPETIR)),
-                        dispositivoId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID)),
-                        completada = c.getInt(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_COMPLETADA)) == 1
-                    )
-                )
-            }
-        }
-        return lista
-    }
-
-    fun eliminarTarea(id: Long): Int {
-        val db = dbHelper.writableDatabase
-        db.delete(
-            DatabaseHelper.TABLE_TAREA_DETALLES,
-            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ?",
+        val fotos = obtenerFotosPorDispositivo(id).map { it.ruta }
+        val filas = dbHelper.writableDatabase.delete(
+            DatabaseHelper.TABLE_DISPOSITIVOS,
+            "${DatabaseHelper.COL_ID} = ?",
             arrayOf(id.toString())
         )
-        val filas = db.delete(
-            DatabaseHelper.TABLE_TAREAS,
-            "${DatabaseHelper.COL_TAREA_ID} = ?",
-            arrayOf(id.toString())
-        )
+        if (filas > 0) fotos.forEach(::eliminarArchivoInterno)
         return filas
     }
 
-    fun actualizarTarea(tarea: Tarea): Int {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_TAREA_NOMBRE, tarea.nombre)
-            put(DatabaseHelper.COL_TAREA_DESCRIPCION, tarea.descripcion)
-            put(DatabaseHelper.COL_TAREA_FECHA, tarea.fecha)
-            put(DatabaseHelper.COL_TAREA_REPETIR, tarea.repetirCada)
-            put(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID, tarea.dispositivoId)
-            put(DatabaseHelper.COL_TAREA_COMPLETADA, if (tarea.completada) 1 else 0)
-        }
-        val filas = db.update(
-            DatabaseHelper.TABLE_TAREAS,
-            values,
-            "${DatabaseHelper.COL_TAREA_ID} = ?",
-            arrayOf(tarea.id.toString())
-        )
-        if (filas > 0) {
-            sincronizarDetalleMantenimiento(tarea)
-        }
-        return filas
-    }
-
-    fun marcarTareaCompletada(id: Long) {
-        val db = dbHelper.writableDatabase
-        val tarea = obtenerTareaPorId(id)
-        if (tarea == null || tarea.completada) return
-        val inspeccionesRelacionadas = obtenerInspeccionesRelacionadas(tarea)
-        db.beginTransaction()
-        try {
-            val values = ContentValues().apply {
-                put(DatabaseHelper.COL_TAREA_COMPLETADA, 1)
-            }
-            db.update(DatabaseHelper.TABLE_TAREAS, values, "${DatabaseHelper.COL_TAREA_ID} = ?", arrayOf(id.toString()))
-
-            val valoresInspeccion = ContentValues().apply {
-                put(DatabaseHelper.COL_INSPECCION_COMPLETADA, 1)
-            }
-            db.update(
-                DatabaseHelper.TABLE_INSPECCIONES,
-                valoresInspeccion,
-                "${DatabaseHelper.COL_INSPECCION_FECHA} = ? AND ${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ?",
-                arrayOf(tarea.fecha, tarea.dispositivoId.toString())
-            )
-            crearSiguienteRepeticion(tarea, inspeccionesRelacionadas)
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
-        }
-    }
-
-    private fun crearSiguienteRepeticion(tarea: Tarea, inspecciones: List<Inspeccion>) {
-        val siguienteFechaTarea = calcularSiguienteFecha(tarea.fecha, tarea.repetirCada)
-        val nuevaTareaId = if (siguienteFechaTarea != null) {
-            insertarTarea(
-                tarea.copy(
-                    id = 0,
-                    fecha = siguienteFechaTarea,
-                    completada = false
-                )
-            )
-        } else {
-            0L
-        }
-
-        val nuevasInspecciones = inspecciones
-            .mapNotNull { inspeccion ->
-                val siguienteFechaInspeccion = calcularSiguienteFecha(inspeccion.fecha, inspeccion.repetirCada)
-                    ?: return@mapNotNull null
-                inspeccion.copy(
-                    id = 0,
-                    fecha = siguienteFechaInspeccion,
-                    completada = false
-                )
-            }
-
-        for (inspeccion in nuevasInspecciones) {
-            insertarInspeccion(inspeccion)
-        }
-
-        if (nuevaTareaId > 0 && siguienteFechaTarea != null) {
-            vincularInspeccionesATarea(
-                nuevaTareaId,
-                nuevasInspecciones.filter { it.fecha == siguienteFechaTarea }
-            )
-        }
-    }
-
-    private fun calcularSiguienteFecha(fecha: String, repetirCada: String): String? {
-        return MaintenanceDateUtils.siguienteFecha(fecha, repetirCada)
-    }
-
-    // ==================== INSPECCIONES ====================
-
-    fun insertarInspeccion(inspeccion: Inspeccion): Long {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_INSPECCION_NOMBRE, inspeccion.nombre)
-            put(DatabaseHelper.COL_INSPECCION_DESCRIPCION, inspeccion.descripcion)
-            put(DatabaseHelper.COL_INSPECCION_FECHA, inspeccion.fecha)
-            put(DatabaseHelper.COL_INSPECCION_REPETIR, inspeccion.repetirCada)
-            put(DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID, inspeccion.dispositivoId)
-            put(DatabaseHelper.COL_INSPECCION_COMPLETADA, if (inspeccion.completada) 1 else 0)
-            put(DatabaseHelper.COL_INSPECCION_CONDICION, inspeccion.condicion)
-            put(DatabaseHelper.COL_INSPECCION_NOTAS, inspeccion.notas)
-            put(DatabaseHelper.COL_INSPECCION_FOTOS, inspeccion.fotos.joinToString(","))
-            put(DatabaseHelper.COL_INSPECCION_FECHA_COMPLETADA, inspeccion.fechaCompletada)
-        }
-        val id = db.insert(DatabaseHelper.TABLE_INSPECCIONES, null, values)
-        return id
-    }
-
-    fun obtenerInspecciones(): List<Inspeccion> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Inspeccion>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_INSPECCIONES,
-            null, null, null, null, null,
-            "${DatabaseHelper.COL_INSPECCION_NOMBRE} ASC"
-        )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(c.convertirAInspeccion())
-            }
-        }
-        return lista
-    }
-
-    fun obtenerInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Inspeccion>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_INSPECCIONES,
-            null,
-            "${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ? AND ${DatabaseHelper.COL_INSPECCION_COMPLETADA} = 0",
-            arrayOf(dispositivoId.toString()),
-            null, null,
-            "${DatabaseHelper.COL_INSPECCION_FECHA} ASC"
-        )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(c.convertirAInspeccion())
-            }
-        }
-        return lista
-    }
-
-    fun obtenerTodasInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Inspeccion>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_INSPECCIONES,
-            null,
-            "${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ?",
-            arrayOf(dispositivoId.toString()),
-            null, null,
-            "${DatabaseHelper.COL_INSPECCION_FECHA} ASC"
-        )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(c.convertirAInspeccion())
-            }
-        }
-        return lista
-    }
-
-    fun eliminarInspeccion(id: Long): Int {
-        val db = dbHelper.writableDatabase
-        val filas = db.delete(
-            DatabaseHelper.TABLE_INSPECCIONES,
-            "${DatabaseHelper.COL_INSPECCION_ID} = ?",
-            arrayOf(id.toString())
-        )
-        return filas
-    }
-
-    fun actualizarInspeccion(inspeccion: Inspeccion): Int {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_INSPECCION_NOMBRE, inspeccion.nombre)
-            put(DatabaseHelper.COL_INSPECCION_DESCRIPCION, inspeccion.descripcion)
-            put(DatabaseHelper.COL_INSPECCION_FECHA, inspeccion.fecha)
-            put(DatabaseHelper.COL_INSPECCION_REPETIR, inspeccion.repetirCada)
-            put(DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID, inspeccion.dispositivoId)
-            put(DatabaseHelper.COL_INSPECCION_COMPLETADA, if (inspeccion.completada) 1 else 0)
-            put(DatabaseHelper.COL_INSPECCION_CONDICION, inspeccion.condicion)
-            put(DatabaseHelper.COL_INSPECCION_NOTAS, inspeccion.notas)
-            put(DatabaseHelper.COL_INSPECCION_FOTOS, inspeccion.fotos.joinToString(","))
-            put(DatabaseHelper.COL_INSPECCION_FECHA_COMPLETADA, inspeccion.fechaCompletada)
-        }
-        return db.update(
-            DatabaseHelper.TABLE_INSPECCIONES,
-            values,
-            "${DatabaseHelper.COL_INSPECCION_ID} = ?",
-            arrayOf(inspeccion.id.toString())
-        )
-    }
-
-    fun completarInspeccion(
-        id: Long,
-        condicion: String,
-        notas: String,
-        fotos: List<String>,
-        fechaCompletada: String
-    ): Int {
-        val inspeccion = obtenerInspeccionPorId(id) ?: return 0
-        if (inspeccion.completada) return 0
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_INSPECCION_COMPLETADA, 1)
-            put(DatabaseHelper.COL_INSPECCION_CONDICION, condicion)
-            put(DatabaseHelper.COL_INSPECCION_NOTAS, notas)
-            put(DatabaseHelper.COL_INSPECCION_FOTOS, fotos.joinToString(","))
-            put(DatabaseHelper.COL_INSPECCION_FECHA_COMPLETADA, fechaCompletada)
-        }
-        val filas = dbHelper.writableDatabase.update(
-            DatabaseHelper.TABLE_INSPECCIONES,
-            values,
-            "${DatabaseHelper.COL_INSPECCION_ID} = ?",
-            arrayOf(id.toString())
-        )
-        if (filas > 0) {
-            calcularSiguienteFecha(inspeccion.fecha, inspeccion.repetirCada)?.let { siguienteFecha ->
-                insertarInspeccion(
-                    inspeccion.copy(
-                        id = 0,
-                        fecha = siguienteFecha,
-                        completada = false,
-                        condicion = "",
-                        notas = "",
-                        fotos = emptyList(),
-                        fechaCompletada = null
-                    )
-                )
-            }
-        }
-        return filas
+    private fun valoresDispositivo(dispositivo: Dispositivo) = ContentValues().apply {
+        put(DatabaseHelper.COL_NOMBRE, dispositivo.nombre)
+        put(DatabaseHelper.COL_CATEGORIA, dispositivo.categoria)
+        put(DatabaseHelper.COL_MARCA, dispositivo.marca)
+        put(DatabaseHelper.COL_MODELO, dispositivo.modelo)
+        put(DatabaseHelper.COL_FOTO, dispositivo.foto)
     }
 
     fun guardarDispositivoConCalendario(
         dispositivo: Dispositivo,
-        tareas: List<Tarea>,
+        mantenimientos: List<Mantenimiento>,
         inspecciones: List<Inspeccion>
     ): Long {
         val db = dbHelper.writableDatabase
         db.beginTransaction()
         try {
-            val dispositivoId = insertar(dispositivo)
+            val dispositivoId = db.insert(
+                DatabaseHelper.TABLE_DISPOSITIVOS,
+                null,
+                valoresDispositivo(dispositivo)
+            )
             check(dispositivoId > 0) { "No se pudo guardar el dispositivo" }
-            guardarCalendarioInterno(dispositivoId, tareas, inspecciones)
+            guardarCalendarioInterno(db, dispositivoId, mantenimientos, inspecciones)
             db.setTransactionSuccessful()
             return dispositivoId
         } finally {
@@ -574,13 +104,69 @@ class DispositivoRepository(context: Context) {
 
     fun guardarCalendario(
         dispositivoId: Long,
-        tareas: List<Tarea>,
+        mantenimientos: List<Mantenimiento>,
         inspecciones: List<Inspeccion>
     ) {
         val db = dbHelper.writableDatabase
         db.beginTransaction()
         try {
-            guardarCalendarioInterno(dispositivoId, tareas, inspecciones)
+            guardarCalendarioInterno(db, dispositivoId, mantenimientos, inspecciones)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun guardarEdicionCalendario(
+        dispositivoId: Long,
+        mantenimientos: List<Mantenimiento>,
+        inspecciones: List<Inspeccion>,
+        mantenimientosEliminados: Set<Long>,
+        inspeccionesEliminadas: Set<Long>
+    ) {
+        val db = dbHelper.writableDatabase
+        db.beginTransaction()
+        try {
+            mantenimientosEliminados.forEach { id ->
+                db.delete(
+                    DatabaseHelper.TABLE_MANTENIMIENTOS,
+                    "${DatabaseHelper.COL_MANTENIMIENTO_ID} = ?",
+                    arrayOf(id.toString())
+                )
+            }
+            inspeccionesEliminadas.forEach { id ->
+                db.delete(
+                    DatabaseHelper.TABLE_INSPECCIONES,
+                    "${DatabaseHelper.COL_INSPECCION_ID} = ?",
+                    arrayOf(id.toString())
+                )
+            }
+
+            mantenimientos.forEach { mantenimiento ->
+                val guardado = mantenimiento.copy(dispositivoId = dispositivoId)
+                val id = if (guardado.id > 0) {
+                    actualizarMantenimiento(db, guardado)
+                    guardado.id
+                } else {
+                    insertarMantenimiento(db, guardado)
+                }
+                check(id > 0) { "No se pudo guardar el mantenimiento" }
+                asociarFuenteATarea(db, dispositivoId, guardado.fecha, "mantenimiento", id)
+            }
+
+            inspecciones.forEach { inspeccion ->
+                val guardada = inspeccion.copy(dispositivoId = dispositivoId)
+                val id = if (guardada.id > 0) {
+                    actualizarInspeccion(db, guardada)
+                    guardada.id
+                } else {
+                    insertarInspeccion(db, guardada)
+                }
+                check(id > 0) { "No se pudo guardar la inspeccion" }
+                asociarFuenteATarea(db, dispositivoId, guardada.fecha, "inspeccion", id)
+            }
+
+            eliminarTareasVacias(db)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()
@@ -588,313 +174,553 @@ class DispositivoRepository(context: Context) {
     }
 
     private fun guardarCalendarioInterno(
+        db: SQLiteDatabase,
         dispositivoId: Long,
-        tareas: List<Tarea>,
+        mantenimientos: List<Mantenimiento>,
         inspecciones: List<Inspeccion>
     ) {
-        val inspeccionesGuardadas = inspecciones.map { it.copy(dispositivoId = dispositivoId) }
-        for (inspeccion in inspeccionesGuardadas) {
-            insertarInspeccion(inspeccion)
+        mantenimientos.forEach { mantenimiento ->
+            val guardado = mantenimiento.copy(dispositivoId = dispositivoId)
+            val id = insertarMantenimiento(db, guardado)
+            check(id > 0) { "No se pudo guardar el mantenimiento" }
+            asociarFuenteATarea(db, dispositivoId, guardado.fecha, "mantenimiento", id)
         }
-        for (tarea in tareas) {
-            val tareaGuardada = tarea.copy(dispositivoId = dispositivoId)
-            val tareaId = insertarTarea(tareaGuardada)
-            check(tareaId > 0) { "No se pudo guardar el mantenimiento" }
-            val inspeccionesParaTarea = inspeccionesGuardadas.filter { it.fecha == tareaGuardada.fecha }
-                .ifEmpty { if (tareas.size == 1) inspeccionesGuardadas else emptyList() }
-            vincularInspeccionesATarea(tareaId, inspeccionesParaTarea)
-        }
-    }
-
-    fun guardarEdicionCalendario(
-        dispositivoId: Long,
-        tareas: List<Tarea>,
-        inspecciones: List<Inspeccion>,
-        tareasEliminadas: Set<Long>,
-        inspeccionesEliminadas: Set<Long>
-    ) {
-        val db = dbHelper.writableDatabase
-        db.beginTransaction()
-        try {
-            tareasEliminadas.forEach(::eliminarTarea)
-            inspeccionesEliminadas.forEach(::eliminarInspeccion)
-
-            val inspeccionesGuardadas = inspecciones.map { it.copy(dispositivoId = dispositivoId) }
-            for (inspeccion in inspeccionesGuardadas) {
-                if (inspeccion.id > 0) actualizarInspeccion(inspeccion) else insertarInspeccion(inspeccion)
-            }
-
-            val tareasGuardadas = tareas.map { it.copy(dispositivoId = dispositivoId) }
-            for (tarea in tareasGuardadas) {
-                val tareaGuardada = if (tarea.id > 0) {
-                    actualizarTarea(tarea)
-                    tarea
-                } else {
-                    tarea.copy(id = insertarTarea(tarea))
-                }
-                check(tareaGuardada.id > 0) { "No se pudo guardar el mantenimiento" }
-                val inspeccionesParaTarea = inspeccionesGuardadas.filter { it.fecha == tareaGuardada.fecha }
-                    .ifEmpty { if (tareasGuardadas.size == 1) inspeccionesGuardadas else emptyList() }
-                sincronizarDetallesDeTarea(tareaGuardada, inspeccionesParaTarea)
-            }
-            db.setTransactionSuccessful()
-        } finally {
-            db.endTransaction()
+        inspecciones.forEach { inspeccion ->
+            val guardada = inspeccion.copy(dispositivoId = dispositivoId)
+            val id = insertarInspeccion(db, guardada)
+            check(id > 0) { "No se pudo guardar la inspeccion" }
+            asociarFuenteATarea(db, dispositivoId, guardada.fecha, "inspeccion", id)
         }
     }
 
-    fun obtenerInspeccionPorId(id: Long): Inspeccion? {
-        val cursor = dbHelper.readableDatabase.query(
+    private fun insertarMantenimiento(db: SQLiteDatabase, mantenimiento: Mantenimiento): Long {
+        return db.insert(DatabaseHelper.TABLE_MANTENIMIENTOS, null, valoresMantenimiento(mantenimiento))
+    }
+
+    private fun actualizarMantenimiento(db: SQLiteDatabase, mantenimiento: Mantenimiento): Int {
+        val filas = db.update(
+            DatabaseHelper.TABLE_MANTENIMIENTOS,
+            valoresMantenimiento(mantenimiento),
+            "${DatabaseHelper.COL_MANTENIMIENTO_ID} = ?",
+            arrayOf(mantenimiento.id.toString())
+        )
+        moverItemAFuentePendiente(db, "mantenimiento", mantenimiento.id, mantenimiento.dispositivoId, mantenimiento.fecha)
+        return filas
+    }
+
+    private fun valoresMantenimiento(mantenimiento: Mantenimiento) = ContentValues().apply {
+        put(DatabaseHelper.COL_MANTENIMIENTO_NOMBRE, mantenimiento.nombre)
+        put(DatabaseHelper.COL_MANTENIMIENTO_DESCRIPCION, mantenimiento.descripcion)
+        put(DatabaseHelper.COL_MANTENIMIENTO_FECHA, mantenimiento.fecha)
+        put(DatabaseHelper.COL_MANTENIMIENTO_REPETIR, mantenimiento.repetirCada)
+        putIdOrNull(DatabaseHelper.COL_MANTENIMIENTO_DISPOSITIVO_ID, mantenimiento.dispositivoId)
+    }
+
+    private fun insertarInspeccion(db: SQLiteDatabase, inspeccion: Inspeccion): Long {
+        return db.insert(DatabaseHelper.TABLE_INSPECCIONES, null, valoresInspeccion(inspeccion))
+    }
+
+    private fun actualizarInspeccion(db: SQLiteDatabase, inspeccion: Inspeccion): Int {
+        val filas = db.update(
             DatabaseHelper.TABLE_INSPECCIONES,
-            null,
+            valoresInspeccion(inspeccion),
             "${DatabaseHelper.COL_INSPECCION_ID} = ?",
-            arrayOf(id.toString()),
+            arrayOf(inspeccion.id.toString())
+        )
+        moverItemAFuentePendiente(db, "inspeccion", inspeccion.id, inspeccion.dispositivoId, inspeccion.fecha)
+        return filas
+    }
+
+    private fun valoresInspeccion(inspeccion: Inspeccion) = ContentValues().apply {
+        put(DatabaseHelper.COL_INSPECCION_NOMBRE, inspeccion.nombre)
+        put(DatabaseHelper.COL_INSPECCION_DESCRIPCION, inspeccion.descripcion)
+        put(DatabaseHelper.COL_INSPECCION_FECHA, inspeccion.fecha)
+        put(DatabaseHelper.COL_INSPECCION_REPETIR, inspeccion.repetirCada)
+        putIdOrNull(DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID, inspeccion.dispositivoId)
+    }
+
+    private fun ContentValues.putIdOrNull(columna: String, id: Long) {
+        if (id > 0) put(columna, id) else putNull(columna)
+    }
+
+    private fun asociarFuenteATarea(
+        db: SQLiteDatabase,
+        dispositivoId: Long,
+        fecha: String,
+        tipo: String,
+        fuenteId: Long
+    ) {
+        val columnaFuente = if (tipo == "mantenimiento") {
+            DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID
+        } else {
+            DatabaseHelper.COL_ITEM_INSPECCION_ID
+        }
+        val cursor = db.query(
+            DatabaseHelper.TABLE_TAREA_ITEMS,
+            arrayOf(DatabaseHelper.COL_ITEM_ID),
+            "$columnaFuente = ?",
+            arrayOf(fuenteId.toString()),
             null, null, null
         )
-        cursor.use { c ->
-            return if (c.moveToFirst()) c.convertirAInspeccion() else null
+        val existente = cursor.use { if (it.moveToFirst()) it.getLong(0) else 0L }
+        val tareaId = obtenerOCrearTarea(db, dispositivoId, fecha)
+        if (existente > 0) {
+            db.update(
+                DatabaseHelper.TABLE_TAREA_ITEMS,
+                ContentValues().apply { put(DatabaseHelper.COL_ITEM_TAREA_ID, tareaId) },
+                "${DatabaseHelper.COL_ITEM_ID} = ?",
+                arrayOf(existente.toString())
+            )
+            return
         }
-    }
 
-    private fun Cursor.convertirAInspeccion(): Inspeccion {
-        val fotosGuardadas = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_FOTOS)).orEmpty()
-        return Inspeccion(
-            id = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_ID)),
-            nombre = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_NOMBRE)),
-            descripcion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_DESCRIPCION)),
-            fecha = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_FECHA)),
-            repetirCada = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_REPETIR)),
-            dispositivoId = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID)),
-            completada = getInt(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_COMPLETADA)) == 1,
-            condicion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_CONDICION)).orEmpty(),
-            notas = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_NOTAS)).orEmpty(),
-            fotos = fotosGuardadas.takeIf { it.isNotBlank() }?.split(",").orEmpty(),
-            fechaCompletada = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_FECHA_COMPLETADA))
-        )
-    }
-
-    // ==================== TAREA DETALLES ====================
-
-    fun obtenerDetallesPorTarea(tareaId: Long): List<TareaDetalle> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<TareaDetalle>()
-        val cursor = db.query(
-            DatabaseHelper.TABLE_TAREA_DETALLES,
+        db.insert(
+            DatabaseHelper.TABLE_TAREA_ITEMS,
             null,
-            "${DatabaseHelper.COL_DETALLE_TAREA_ID} = ?",
-            arrayOf(tareaId.toString()),
-            null, null, null
+            ContentValues().apply {
+                put(DatabaseHelper.COL_ITEM_TAREA_ID, tareaId)
+                put(DatabaseHelper.COL_ITEM_TIPO, tipo)
+                if (tipo == "mantenimiento") {
+                    put(DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID, fuenteId)
+                    putNull(DatabaseHelper.COL_ITEM_INSPECCION_ID)
+                } else {
+                    putNull(DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID)
+                    put(DatabaseHelper.COL_ITEM_INSPECCION_ID, fuenteId)
+                }
+            }
         )
-
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                val fotosStr = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_FOTOS)) ?: ""
-                val fotos = if (fotosStr.isNotEmpty()) fotosStr.split(",") else emptyList()
-                lista.add(
-                    TareaDetalle(
-                        id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_ID)),
-                        tareaId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_TAREA_ID)),
-                        tipo = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_TIPO)),
-                        nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_NOMBRE)),
-                        descripcion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_DESCRIPCION)),
-                        condicion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_CONDICION)),
-                        notas = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_NOTAS)),
-                        fotos = fotos,
-                        completada = c.getInt(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_COMPLETADA)) == 1,
-                        fechaCompletada = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_DETALLE_FECHA_COMPLETADA))
-                    )
-                )
-            }
-        }
-
-        val tareaParaDetalle = obtenerTareaPorId(tareaId)
-        if (lista.none { it.tipo == "mantenimiento" } && tareaParaDetalle != null) {
-            val detalleId = insertarDetalleBaseDeTarea(tareaId, tareaParaDetalle.nombre, tareaParaDetalle.descripcion)
-            if (detalleId > 0) {
-                lista.add(
-                    TareaDetalle(
-                        id = detalleId,
-                        tareaId = tareaId,
-                        tipo = "mantenimiento",
-                        nombre = tareaParaDetalle.nombre,
-                        descripcion = tareaParaDetalle.descripcion
-                    )
-                )
-            }
-        }
-
-        if (tareaParaDetalle != null) {
-            val inspeccionesRelacionadas = obtenerInspeccionesRelacionadas(tareaParaDetalle)
-            for (inspeccion in inspeccionesRelacionadas) {
-                val yaExiste = lista.any {
-                    it.tipo == "inspeccion" &&
-                        it.nombre == inspeccion.nombre &&
-                        it.descripcion == inspeccion.descripcion
-                }
-                if (!yaExiste) {
-                    val detalleId = insertarDetalleInspeccionParaTarea(tareaId, inspeccion)
-                    if (detalleId > 0) {
-                        lista.add(
-                            TareaDetalle(
-                                id = detalleId,
-                                tareaId = tareaId,
-                                tipo = "inspeccion",
-                                nombre = inspeccion.nombre,
-                                descripcion = inspeccion.descripcion
-                            )
-                        )
-                    }
-                }
-            }
-        }
-        return lista
     }
 
-    private fun obtenerTareaPorId(tareaId: Long): Tarea? {
-        val db = dbHelper.readableDatabase
+    private fun moverItemAFuentePendiente(
+        db: SQLiteDatabase,
+        tipo: String,
+        fuenteId: Long,
+        dispositivoId: Long,
+        fecha: String
+    ) {
+        val columnaFuente = if (tipo == "mantenimiento") {
+            DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID
+        } else {
+            DatabaseHelper.COL_ITEM_INSPECCION_ID
+        }
+        val cursor = db.rawQuery(
+            """
+                SELECT ti.${DatabaseHelper.COL_ITEM_ID}
+                FROM ${DatabaseHelper.TABLE_TAREA_ITEMS} ti
+                INNER JOIN ${DatabaseHelper.TABLE_TAREAS} t
+                    ON ti.${DatabaseHelper.COL_ITEM_TAREA_ID} = t.${DatabaseHelper.COL_TAREA_ID}
+                WHERE ti.$columnaFuente = ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
+            """.trimIndent(),
+            arrayOf(fuenteId.toString())
+        )
+        val itemId = cursor.use { if (it.moveToFirst()) it.getLong(0) else 0L }
+        if (itemId == 0L) return
+        val tareaId = obtenerOCrearTarea(db, dispositivoId, fecha)
+        db.update(
+            DatabaseHelper.TABLE_TAREA_ITEMS,
+            ContentValues().apply { put(DatabaseHelper.COL_ITEM_TAREA_ID, tareaId) },
+            "${DatabaseHelper.COL_ITEM_ID} = ?",
+            arrayOf(itemId.toString())
+        )
+    }
+
+    private fun obtenerOCrearTarea(db: SQLiteDatabase, dispositivoId: Long, fecha: String): Long {
+        val seleccionDispositivo = if (dispositivoId > 0) {
+            "${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?"
+        } else {
+            "${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} IS NULL"
+        }
+        val args = if (dispositivoId > 0) arrayOf(fecha, dispositivoId.toString()) else arrayOf(fecha)
         val cursor = db.query(
+            DatabaseHelper.TABLE_TAREAS,
+            arrayOf(DatabaseHelper.COL_TAREA_ID),
+            "${DatabaseHelper.COL_TAREA_FECHA} = ? AND $seleccionDispositivo AND ${DatabaseHelper.COL_TAREA_COMPLETADA} = 0",
+            args,
+            null, null,
+            "${DatabaseHelper.COL_TAREA_ID} ASC",
+            "1"
+        )
+        cursor.use {
+            if (it.moveToFirst()) return it.getLong(0)
+        }
+        return db.insert(
+            DatabaseHelper.TABLE_TAREAS,
+            null,
+            ContentValues().apply {
+                putIdOrNull(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID, dispositivoId)
+                put(DatabaseHelper.COL_TAREA_FECHA, fecha)
+            }
+        )
+    }
+
+    fun obtenerMantenimientosPorDispositivo(dispositivoId: Long): List<Mantenimiento> {
+        val cursor = dbHelper.readableDatabase.rawQuery(
+            """
+                SELECT DISTINCT m.*
+                FROM ${DatabaseHelper.TABLE_MANTENIMIENTOS} m
+                INNER JOIN ${DatabaseHelper.TABLE_TAREA_ITEMS} ti
+                    ON ti.${DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID} = m.${DatabaseHelper.COL_MANTENIMIENTO_ID}
+                INNER JOIN ${DatabaseHelper.TABLE_TAREAS} t
+                    ON t.${DatabaseHelper.COL_TAREA_ID} = ti.${DatabaseHelper.COL_ITEM_TAREA_ID}
+                WHERE m.${DatabaseHelper.COL_MANTENIMIENTO_DISPOSITIVO_ID} = ?
+                  AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
+                ORDER BY m.${DatabaseHelper.COL_MANTENIMIENTO_FECHA} ASC
+            """.trimIndent(),
+            arrayOf(dispositivoId.toString())
+        )
+        return cursor.use { c -> buildList { while (c.moveToNext()) add(c.aMantenimiento()) } }
+    }
+
+    fun obtenerInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> {
+        val cursor = dbHelper.readableDatabase.rawQuery(
+            """
+                SELECT DISTINCT i.*
+                FROM ${DatabaseHelper.TABLE_INSPECCIONES} i
+                INNER JOIN ${DatabaseHelper.TABLE_TAREA_ITEMS} ti
+                    ON ti.${DatabaseHelper.COL_ITEM_INSPECCION_ID} = i.${DatabaseHelper.COL_INSPECCION_ID}
+                INNER JOIN ${DatabaseHelper.TABLE_TAREAS} t
+                    ON t.${DatabaseHelper.COL_TAREA_ID} = ti.${DatabaseHelper.COL_ITEM_TAREA_ID}
+                WHERE i.${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ?
+                  AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0
+                ORDER BY i.${DatabaseHelper.COL_INSPECCION_FECHA} ASC
+            """.trimIndent(),
+            arrayOf(dispositivoId.toString())
+        )
+        return cursor.use { c -> buildList { while (c.moveToNext()) add(c.aInspeccion()) } }
+    }
+
+    fun obtenerTareas(): List<Tarea> {
+        val cursor = dbHelper.readableDatabase.query(
+            DatabaseHelper.TABLE_TAREAS,
+            null, null, null, null, null,
+            "${DatabaseHelper.COL_TAREA_FECHA} ASC"
+        )
+        return cursor.use { c -> buildList { while (c.moveToNext()) add(c.aTarea()) } }
+    }
+
+    fun obtenerTareaPorId(tareaId: Long): Tarea? {
+        val cursor = dbHelper.readableDatabase.query(
             DatabaseHelper.TABLE_TAREAS,
             null,
             "${DatabaseHelper.COL_TAREA_ID} = ?",
             arrayOf(tareaId.toString()),
             null, null, null
         )
-        cursor.use { c ->
-            if (c.moveToFirst()) {
-                return Tarea(
-                    id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_ID)),
-                    nombre = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_NOMBRE)),
-                    descripcion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DESCRIPCION)),
-                    fecha = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FECHA)),
-                    repetirCada = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_REPETIR)),
-                    dispositivoId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID)),
-                    completada = c.getInt(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_COMPLETADA)) == 1
-                )
-            }
-        }
-        return null
+        return cursor.use { if (it.moveToFirst()) it.aTarea() else null }
     }
 
-    private fun obtenerInspeccionesRelacionadas(tarea: Tarea): List<Inspeccion> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<Inspeccion>()
+    fun obtenerItemsPorTarea(tareaId: Long): List<TareaItem> {
+        val cursor = dbHelper.readableDatabase.rawQuery(
+            """
+                SELECT ti.*,
+                       COALESCE(m.${DatabaseHelper.COL_MANTENIMIENTO_NOMBRE}, i.${DatabaseHelper.COL_INSPECCION_NOMBRE}, '') AS nombre,
+                       COALESCE(m.${DatabaseHelper.COL_MANTENIMIENTO_DESCRIPCION}, i.${DatabaseHelper.COL_INSPECCION_DESCRIPCION}, '') AS descripcion
+                FROM ${DatabaseHelper.TABLE_TAREA_ITEMS} ti
+                LEFT JOIN ${DatabaseHelper.TABLE_MANTENIMIENTOS} m
+                    ON ti.${DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID} = m.${DatabaseHelper.COL_MANTENIMIENTO_ID}
+                LEFT JOIN ${DatabaseHelper.TABLE_INSPECCIONES} i
+                    ON ti.${DatabaseHelper.COL_ITEM_INSPECCION_ID} = i.${DatabaseHelper.COL_INSPECCION_ID}
+                WHERE ti.${DatabaseHelper.COL_ITEM_TAREA_ID} = ?
+                ORDER BY CASE ti.${DatabaseHelper.COL_ITEM_TIPO} WHEN 'mantenimiento' THEN 0 ELSE 1 END, nombre ASC
+            """.trimIndent(),
+            arrayOf(tareaId.toString())
+        )
+        return cursor.use { c -> buildList { while (c.moveToNext()) add(c.aTareaItem()) } }
+    }
+
+    fun obtenerFotosPorTarea(tareaId: Long): List<TareaFoto> {
+        val cursor = dbHelper.readableDatabase.query(
+            DatabaseHelper.TABLE_TAREA_FOTOS,
+            null,
+            "${DatabaseHelper.COL_TAREA_FOTO_TAREA_ID} = ?",
+            arrayOf(tareaId.toString()),
+            null, null,
+            "${DatabaseHelper.COL_TAREA_FOTO_ID} ASC"
+        )
+        return cursor.use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add(
+                        TareaFoto(
+                            id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_ID)),
+                            tareaId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_TAREA_ID)),
+                            ruta = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_RUTA)),
+                            fechaCreacion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_FECHA))
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun completarTarea(
+        tareaId: Long,
+        items: List<TareaItem>,
+        fotos: List<String>,
+        fechaCompletada: String
+    ) {
+        val db = dbHelper.writableDatabase
+        val tarea = obtenerTareaPorId(tareaId) ?: return
+        if (tarea.completada) return
+        val rutasAnteriores = obtenerFotosPorTarea(tareaId).map { it.ruta }.toSet()
+        val rutasNuevas = fotos.filter { it.isNotBlank() }.distinct().toSet()
+
+        db.beginTransaction()
+        try {
+            items.forEach { item ->
+                db.update(
+                    DatabaseHelper.TABLE_TAREA_ITEMS,
+                    ContentValues().apply {
+                        put(DatabaseHelper.COL_ITEM_NOTAS, item.notas)
+                        put(DatabaseHelper.COL_ITEM_CONDICION, if (item.tipo == "inspeccion") item.condicion else "")
+                        put(DatabaseHelper.COL_ITEM_COMPLETADA, 1)
+                    },
+                    "${DatabaseHelper.COL_ITEM_ID} = ? AND ${DatabaseHelper.COL_ITEM_TAREA_ID} = ?",
+                    arrayOf(item.id.toString(), tareaId.toString())
+                )
+            }
+
+            db.delete(
+                DatabaseHelper.TABLE_TAREA_FOTOS,
+                "${DatabaseHelper.COL_TAREA_FOTO_TAREA_ID} = ?",
+                arrayOf(tareaId.toString())
+            )
+            rutasNuevas.forEach { ruta ->
+                db.insert(
+                    DatabaseHelper.TABLE_TAREA_FOTOS,
+                    null,
+                    ContentValues().apply {
+                        put(DatabaseHelper.COL_TAREA_FOTO_TAREA_ID, tareaId)
+                        put(DatabaseHelper.COL_TAREA_FOTO_RUTA, ruta)
+                        put(DatabaseHelper.COL_TAREA_FOTO_FECHA, fechaCompletada)
+                    }
+                )
+            }
+
+            db.update(
+                DatabaseHelper.TABLE_TAREAS,
+                ContentValues().apply {
+                    put(DatabaseHelper.COL_TAREA_COMPLETADA, 1)
+                    put(DatabaseHelper.COL_TAREA_FECHA_COMPLETADA, fechaCompletada)
+                },
+                "${DatabaseHelper.COL_TAREA_ID} = ?",
+                arrayOf(tareaId.toString())
+            )
+            crearRepeticiones(db, tarea, items)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        (rutasAnteriores - rutasNuevas).forEach(::eliminarArchivoInterno)
+    }
+
+    private fun crearRepeticiones(db: SQLiteDatabase, tarea: Tarea, items: List<TareaItem>) {
+        items.forEach { item ->
+            if (item.tipo == "mantenimiento") {
+                val actual = item.mantenimientoId?.let { obtenerMantenimientoPorId(db, it) } ?: return@forEach
+                val siguienteFecha = MaintenanceDateUtils.siguienteFecha(actual.fecha, actual.repetirCada) ?: return@forEach
+                val nuevoId = insertarMantenimiento(db, actual.copy(id = 0, fecha = siguienteFecha))
+                asociarFuenteATarea(db, tarea.dispositivoId, siguienteFecha, "mantenimiento", nuevoId)
+            } else {
+                val actual = item.inspeccionId?.let { obtenerInspeccionPorId(db, it) } ?: return@forEach
+                val siguienteFecha = MaintenanceDateUtils.siguienteFecha(actual.fecha, actual.repetirCada) ?: return@forEach
+                val nuevoId = insertarInspeccion(db, actual.copy(id = 0, fecha = siguienteFecha))
+                asociarFuenteATarea(db, tarea.dispositivoId, siguienteFecha, "inspeccion", nuevoId)
+            }
+        }
+    }
+
+    fun obtenerResultadosInspeccionPorDispositivo(dispositivoId: Long): List<TareaItem> {
+        val cursor = dbHelper.readableDatabase.rawQuery(
+            """
+                SELECT ti.*, i.${DatabaseHelper.COL_INSPECCION_NOMBRE} AS nombre,
+                       i.${DatabaseHelper.COL_INSPECCION_DESCRIPCION} AS descripcion
+                FROM ${DatabaseHelper.TABLE_TAREA_ITEMS} ti
+                INNER JOIN ${DatabaseHelper.TABLE_TAREAS} t
+                    ON ti.${DatabaseHelper.COL_ITEM_TAREA_ID} = t.${DatabaseHelper.COL_TAREA_ID}
+                INNER JOIN ${DatabaseHelper.TABLE_INSPECCIONES} i
+                    ON ti.${DatabaseHelper.COL_ITEM_INSPECCION_ID} = i.${DatabaseHelper.COL_INSPECCION_ID}
+                WHERE t.${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?
+                  AND ti.${DatabaseHelper.COL_ITEM_TIPO} = 'inspeccion'
+                  AND ti.${DatabaseHelper.COL_ITEM_CONDICION} <> ''
+                ORDER BY t.${DatabaseHelper.COL_TAREA_FECHA} DESC
+            """.trimIndent(),
+            arrayOf(dispositivoId.toString())
+        )
+        return cursor.use { c -> buildList { while (c.moveToNext()) add(c.aTareaItem()) } }
+    }
+
+    private fun ejecutarItemsQuery(whereClause: String, args: Array<String>?): List<ItemProgramado> {
+        val cursor = dbHelper.readableDatabase.rawQuery(
+            """
+                SELECT t.${DatabaseHelper.COL_TAREA_ID} AS tarea_id,
+                       t.${DatabaseHelper.COL_TAREA_FECHA} AS fecha,
+                       COALESCE(d.${DatabaseHelper.COL_NOMBRE}, '') AS dispositivo,
+                       ti.${DatabaseHelper.COL_ITEM_TIPO} AS tipo,
+                       COALESCE(m.${DatabaseHelper.COL_MANTENIMIENTO_NOMBRE}, i.${DatabaseHelper.COL_INSPECCION_NOMBRE}, '') AS nombre,
+                       COALESCE(m.${DatabaseHelper.COL_MANTENIMIENTO_DESCRIPCION}, i.${DatabaseHelper.COL_INSPECCION_DESCRIPCION}, '') AS descripcion
+                FROM ${DatabaseHelper.TABLE_TAREAS} t
+                INNER JOIN ${DatabaseHelper.TABLE_TAREA_ITEMS} ti
+                    ON ti.${DatabaseHelper.COL_ITEM_TAREA_ID} = t.${DatabaseHelper.COL_TAREA_ID}
+                LEFT JOIN ${DatabaseHelper.TABLE_MANTENIMIENTOS} m
+                    ON ti.${DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID} = m.${DatabaseHelper.COL_MANTENIMIENTO_ID}
+                LEFT JOIN ${DatabaseHelper.TABLE_INSPECCIONES} i
+                    ON ti.${DatabaseHelper.COL_ITEM_INSPECCION_ID} = i.${DatabaseHelper.COL_INSPECCION_ID}
+                LEFT JOIN ${DatabaseHelper.TABLE_DISPOSITIVOS} d
+                    ON t.${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = d.${DatabaseHelper.COL_ID}
+                WHERE $whereClause
+                ORDER BY t.${DatabaseHelper.COL_TAREA_FECHA} ASC, ti.${DatabaseHelper.COL_ITEM_ID} ASC
+            """.trimIndent(),
+            args
+        )
+        return cursor.use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add(
+                        ItemProgramado(
+                            id = c.getLong(c.getColumnIndexOrThrow("tarea_id")),
+                            nombre = c.getString(c.getColumnIndexOrThrow("nombre")),
+                            descripcion = c.getString(c.getColumnIndexOrThrow("descripcion")),
+                            fecha = c.getString(c.getColumnIndexOrThrow("fecha")),
+                            nombreDispositivo = c.getString(c.getColumnIndexOrThrow("dispositivo")),
+                            tipo = c.getString(c.getColumnIndexOrThrow("tipo"))
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    fun obtenerItemsPasadas(): List<ItemProgramado> = ejecutarItemsQuery(
+        "t.${DatabaseHelper.COL_TAREA_FECHA} < ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0",
+        arrayOf(LocalDate.now().toString())
+    )
+
+    fun obtenerItemsProximas(): List<ItemProgramado> = ejecutarItemsQuery(
+        "t.${DatabaseHelper.COL_TAREA_FECHA} >= ? AND t.${DatabaseHelper.COL_TAREA_FECHA} < ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0",
+        arrayOf(LocalDate.now().toString(), LocalDate.now().plusDays(7).toString())
+    )
+
+    fun obtenerItemsLejanas(): List<ItemProgramado> = ejecutarItemsQuery(
+        "t.${DatabaseHelper.COL_TAREA_FECHA} >= ? AND t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 0",
+        arrayOf(LocalDate.now().plusDays(7).toString())
+    )
+
+    fun obtenerItemsCompletadas(): List<ItemProgramado> = ejecutarItemsQuery(
+        "t.${DatabaseHelper.COL_TAREA_COMPLETADA} = 1",
+        null
+    )
+
+    private fun obtenerMantenimientoPorId(db: SQLiteDatabase, id: Long): Mantenimiento? {
+        val cursor = db.query(
+            DatabaseHelper.TABLE_MANTENIMIENTOS,
+            null,
+            "${DatabaseHelper.COL_MANTENIMIENTO_ID} = ?",
+            arrayOf(id.toString()),
+            null, null, null
+        )
+        return cursor.use { if (it.moveToFirst()) it.aMantenimiento() else null }
+    }
+
+    private fun obtenerInspeccionPorId(db: SQLiteDatabase, id: Long): Inspeccion? {
         val cursor = db.query(
             DatabaseHelper.TABLE_INSPECCIONES,
             null,
-            "${DatabaseHelper.COL_INSPECCION_FECHA} = ? AND ${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = ? AND ${DatabaseHelper.COL_INSPECCION_COMPLETADA} = 0",
-            arrayOf(tarea.fecha, tarea.dispositivoId.toString()),
-            null, null,
-            "${DatabaseHelper.COL_INSPECCION_NOMBRE} ASC"
+            "${DatabaseHelper.COL_INSPECCION_ID} = ?",
+            arrayOf(id.toString()),
+            null, null, null
         )
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(c.convertirAInspeccion())
-            }
-        }
-        return lista
+        return cursor.use { if (it.moveToFirst()) it.aInspeccion() else null }
     }
 
-    fun actualizarTareaDetalle(detalle: TareaDetalle): Int {
-        val db = dbHelper.writableDatabase
-        val values = ContentValues().apply {
-            put(DatabaseHelper.COL_DETALLE_CONDICION, detalle.condicion)
-            put(DatabaseHelper.COL_DETALLE_NOTAS, detalle.notas)
-            put(DatabaseHelper.COL_DETALLE_FOTOS, detalle.fotos.joinToString(","))
-            put(DatabaseHelper.COL_DETALLE_COMPLETADA, if (detalle.completada) 1 else 0)
-            put(DatabaseHelper.COL_DETALLE_FECHA_COMPLETADA, detalle.fechaCompletada)
-        }
-        val filas = db.update(
-            DatabaseHelper.TABLE_TAREA_DETALLES,
-            values,
-            "${DatabaseHelper.COL_DETALLE_ID} = ?",
-            arrayOf(detalle.id.toString())
+    private fun eliminarTareasVacias(db: SQLiteDatabase) {
+        db.execSQL(
+            "DELETE FROM ${DatabaseHelper.TABLE_TAREAS} WHERE ${DatabaseHelper.COL_TAREA_COMPLETADA} = 0 AND ${DatabaseHelper.COL_TAREA_ID} NOT IN (SELECT ${DatabaseHelper.COL_ITEM_TAREA_ID} FROM ${DatabaseHelper.TABLE_TAREA_ITEMS})"
         )
-        return filas
     }
 
-    // ==================== COMBINADO (TAREAS + INSPECCIONES) ====================
-
-    private fun ejecutarUnionQuery(whereClause: String, whereArgs: Array<String>?): List<ItemProgramado> {
-        val db = dbHelper.readableDatabase
-        val lista = mutableListOf<ItemProgramado>()
-        val baseTareas = """
-            SELECT t.${DatabaseHelper.COL_TAREA_ID} as id,
-                   t.${DatabaseHelper.COL_TAREA_NOMBRE} as nombre,
-                   t.${DatabaseHelper.COL_TAREA_DESCRIPCION} as descripcion,
-                   t.${DatabaseHelper.COL_TAREA_FECHA} as fecha,
-                   COALESCE(d.${DatabaseHelper.COL_NOMBRE}, '') as nombre_dispositivo,
-                   'tarea' as tipo
-            FROM ${DatabaseHelper.TABLE_TAREAS} t
-            LEFT JOIN ${DatabaseHelper.TABLE_DISPOSITIVOS} d
-                ON t.${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = d.${DatabaseHelper.COL_ID}
-        """
-        val baseInspecciones = """
-            SELECT i.${DatabaseHelper.COL_INSPECCION_ID} as id,
-                   i.${DatabaseHelper.COL_INSPECCION_NOMBRE} as nombre,
-                   i.${DatabaseHelper.COL_INSPECCION_DESCRIPCION} as descripcion,
-                   i.${DatabaseHelper.COL_INSPECCION_FECHA} as fecha,
-                   COALESCE(d.${DatabaseHelper.COL_NOMBRE}, '') as nombre_dispositivo,
-                   'inspeccion' as tipo
-            FROM ${DatabaseHelper.TABLE_INSPECCIONES} i
-            LEFT JOIN ${DatabaseHelper.TABLE_DISPOSITIVOS} d
-                ON i.${DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID} = d.${DatabaseHelper.COL_ID}
-        """
-        val query = """
-            $baseTareas
-            WHERE $whereClause
-            UNION ALL
-            $baseInspecciones
-            WHERE $whereClause
-            ORDER BY fecha ASC
-        """
-        val argsDuplicados = whereArgs?.let { it + it }
-        val cursor = db.rawQuery(query, argsDuplicados)
-        cursor.use { c ->
-            while (c.moveToNext()) {
-                lista.add(
-                    ItemProgramado(
-                        id = c.getLong(c.getColumnIndexOrThrow("id")),
-                        nombre = c.getString(c.getColumnIndexOrThrow("nombre")),
-                        descripcion = c.getString(c.getColumnIndexOrThrow("descripcion")),
-                        fecha = c.getString(c.getColumnIndexOrThrow("fecha")),
-                        nombreDispositivo = c.getString(c.getColumnIndexOrThrow("nombre_dispositivo")),
-                        tipo = c.getString(c.getColumnIndexOrThrow("tipo"))
+    private fun obtenerFotosPorDispositivo(dispositivoId: Long): List<TareaFoto> {
+        val cursor = dbHelper.readableDatabase.rawQuery(
+            """
+                SELECT f.*
+                FROM ${DatabaseHelper.TABLE_TAREA_FOTOS} f
+                INNER JOIN ${DatabaseHelper.TABLE_TAREAS} t
+                    ON f.${DatabaseHelper.COL_TAREA_FOTO_TAREA_ID} = t.${DatabaseHelper.COL_TAREA_ID}
+                WHERE t.${DatabaseHelper.COL_TAREA_DISPOSITIVO_ID} = ?
+            """.trimIndent(),
+            arrayOf(dispositivoId.toString())
+        )
+        return cursor.use { c ->
+            buildList {
+                while (c.moveToNext()) {
+                    add(
+                        TareaFoto(
+                            id = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_ID)),
+                            tareaId = c.getLong(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_TAREA_ID)),
+                            ruta = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_RUTA)),
+                            fechaCreacion = c.getString(c.getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FOTO_FECHA))
+                        )
                     )
-                )
+                }
             }
         }
-        return lista.distinctBy { "${it.tipo}:${it.id}" }
     }
 
-    fun obtenerItemsPasadas(): List<ItemProgramado> {
-        val hoy = LocalDate.now().toString()
-        return ejecutarUnionQuery(
-            "fecha < ? AND completada = 0",
-            arrayOf(hoy)
-        )
+    private fun eliminarArchivoInterno(ruta: String) {
+        runCatching {
+            val archivo = File(ruta)
+            val carpetaFotos = File(appContext.filesDir, "tarea_fotos").canonicalFile
+            if (archivo.canonicalFile.parentFile == carpetaFotos) archivo.delete()
+        }
     }
 
-    fun obtenerItemsProximas(): List<ItemProgramado> {
-        val hoy = LocalDate.now().toString()
-        val en7 = LocalDate.now().plusDays(7).toString()
-        return ejecutarUnionQuery(
-            "fecha >= ? AND fecha < ? AND completada = 0",
-            arrayOf(hoy, en7)
-        )
+    private fun Cursor.aMantenimiento() = Mantenimiento(
+        id = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_MANTENIMIENTO_ID)),
+        nombre = getString(getColumnIndexOrThrow(DatabaseHelper.COL_MANTENIMIENTO_NOMBRE)),
+        descripcion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_MANTENIMIENTO_DESCRIPCION)),
+        fecha = getString(getColumnIndexOrThrow(DatabaseHelper.COL_MANTENIMIENTO_FECHA)),
+        repetirCada = getString(getColumnIndexOrThrow(DatabaseHelper.COL_MANTENIMIENTO_REPETIR)),
+        dispositivoId = getLongOrZero(DatabaseHelper.COL_MANTENIMIENTO_DISPOSITIVO_ID)
+    )
+
+    private fun Cursor.aInspeccion() = Inspeccion(
+        id = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_ID)),
+        nombre = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_NOMBRE)),
+        descripcion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_DESCRIPCION)),
+        fecha = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_FECHA)),
+        repetirCada = getString(getColumnIndexOrThrow(DatabaseHelper.COL_INSPECCION_REPETIR)),
+        dispositivoId = getLongOrZero(DatabaseHelper.COL_INSPECCION_DISPOSITIVO_ID)
+    )
+
+    private fun Cursor.aTarea() = Tarea(
+        id = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_ID)),
+        dispositivoId = getLongOrZero(DatabaseHelper.COL_TAREA_DISPOSITIVO_ID),
+        fecha = getString(getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FECHA)),
+        completada = getInt(getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_COMPLETADA)) == 1,
+        fechaCompletada = getString(getColumnIndexOrThrow(DatabaseHelper.COL_TAREA_FECHA_COMPLETADA))
+    )
+
+    private fun Cursor.aTareaItem() = TareaItem(
+        id = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_ID)),
+        tareaId = getLong(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_TAREA_ID)),
+        tipo = getString(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_TIPO)),
+        mantenimientoId = getNullableLong(DatabaseHelper.COL_ITEM_MANTENIMIENTO_ID),
+        inspeccionId = getNullableLong(DatabaseHelper.COL_ITEM_INSPECCION_ID),
+        nombre = getString(getColumnIndexOrThrow("nombre")),
+        descripcion = getString(getColumnIndexOrThrow("descripcion")),
+        notas = getString(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_NOTAS)).orEmpty(),
+        condicion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_CONDICION)).orEmpty(),
+        completada = getInt(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_COMPLETADA)) == 1
+    )
+
+    private fun Cursor.getLongOrZero(columna: String): Long {
+        val indice = getColumnIndexOrThrow(columna)
+        return if (isNull(indice)) 0L else getLong(indice)
     }
 
-    fun obtenerItemsLejanas(): List<ItemProgramado> {
-        val en7 = LocalDate.now().plusDays(7).toString()
-        return ejecutarUnionQuery(
-            "fecha >= ? AND completada = 0",
-            arrayOf(en7)
-        )
-    }
-
-    fun obtenerItemsCompletadas(): List<ItemProgramado> {
-        return ejecutarUnionQuery(
-            "completada = 1",
-            null
-        )
+    private fun Cursor.getNullableLong(columna: String): Long? {
+        val indice = getColumnIndexOrThrow(columna)
+        return if (isNull(indice)) null else getLong(indice)
     }
 }

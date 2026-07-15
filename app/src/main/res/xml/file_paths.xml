@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <files-path name="dispositivo_ia" path="dispositivo_ia/" />
-    <files-path name="detalle_fotos" path="detalle_fotos/" />
+    <files-path name="tarea_fotos" path="tarea_fotos/" />
 </paths>
