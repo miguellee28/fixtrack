@@ -8,7 +8,7 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
 
     companion object {
         const val DATABASE_NAME = "proyecto_final.db"
-        const val DATABASE_VERSION = 5
+        const val DATABASE_VERSION = 6
 
         const val TABLE_DISPOSITIVOS = "dispositivos"
         const val COL_ID = "id"
@@ -49,7 +49,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
         const val COL_ITEM_INSPECCION_ID = "inspeccion_id"
         const val COL_ITEM_NOTAS = "notas"
         const val COL_ITEM_CONDICION = "condicion"
-        const val COL_ITEM_COMPLETADA = "completada"
 
         const val TABLE_TAREA_FOTOS = "tarea_fotos"
         const val COL_TAREA_FOTO_ID = "id"
@@ -122,7 +121,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
                 $COL_ITEM_INSPECCION_ID INTEGER,
                 $COL_ITEM_NOTAS TEXT NOT NULL DEFAULT '',
                 $COL_ITEM_CONDICION TEXT NOT NULL DEFAULT '',
-                $COL_ITEM_COMPLETADA INTEGER NOT NULL DEFAULT 0,
                 CHECK (
                     ($COL_ITEM_TIPO = 'mantenimiento' AND $COL_ITEM_MANTENIMIENTO_ID IS NOT NULL AND $COL_ITEM_INSPECCION_ID IS NULL)
                     OR
@@ -157,7 +155,6 @@ class DatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS tarea_detalles")
         db.execSQL("DROP TABLE IF EXISTS $TABLE_TAREA_FOTOS")
         db.execSQL("DROP TABLE IF EXISTS $TABLE_TAREA_ITEMS")
         db.execSQL("DROP TABLE IF EXISTS $TABLE_TAREAS")

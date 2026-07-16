@@ -24,7 +24,6 @@ import android.widget.ListView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
@@ -47,6 +46,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var contenedorPantallas: FrameLayout
     private lateinit var viewModel: DispositivosViewModel
     private var pantallaActual = ID_INICIO
+    private val aiService by lazy {
+        MaintenanceAiService(
+            GoogleGenAiClient(BuildConfig.GOOGLE_GENAI_API_KEY),
+            BraveSearchClient(BuildConfig.BRAVE_SEARCH_API_KEY)
+        )
+    }
 
     companion object {
         private const val ID_INICIO = 1
@@ -449,25 +454,14 @@ class MainActivity : AppCompatActivity() {
             return "Agrega un dispositivo para empezar a recibir resumenes del estado general."
         }
 
-        var inspeccionesConEstado = 0
-        var malas = 0
-        var regulares = 0
-        var buenas = 0
-        val dispositivosConAlerta = mutableSetOf<String>()
-
-        for (dispositivo in dispositivos) {
-            val detalles = viewModel.obtenerResultadosInspeccionPorDispositivo(dispositivo.id)
-
-            inspeccionesConEstado += detalles.size
-            malas += detalles.count { it.condicion == "malo" }
-            regulares += detalles.count { it.condicion == "regular" }
-            buenas += detalles.count { it.condicion == "bueno" }
-
-            if (detalles.any { it.condicion == "malo" || it.condicion == "regular" }) {
-                dispositivosConAlerta.add(dispositivo.nombre)
+        val inspeccionesPorDispositivo = dispositivos.map { dispositivo ->
+            dispositivo to viewModel.obtenerResultadosInspeccionPorDispositivo(dispositivo.id)
+        }
+        val inspeccionesConEstado = inspeccionesPorDispositivo.sumOf { (_, detalles) ->
+            detalles.count {
+                it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())
             }
         }
-
         if (inspeccionesConEstado == 0) {
             val cantidadDispositivos = if (dispositivos.size == 1) {
                 "Tienes 1 dispositivo registrado."
@@ -477,18 +471,10 @@ class MainActivity : AppCompatActivity() {
             return "$cantidadDispositivos Completa las inspecciones indicando si el estado es Bueno, Regular o Malo para conocer su condición general."
         }
 
-        return when {
-            malas > 0 -> {
-                val nombres = dispositivosConAlerta.take(2).joinToString(", ")
-                "Atencion: hay $malas inspeccion(es) en mal estado. Revisa primero ${nombres.ifBlank { "los dispositivos marcados" }}."
-            }
-            regulares > 0 -> {
-                val nombres = dispositivosConAlerta.take(2).joinToString(", ")
-                "Hay $regulares inspeccion(es) en estado regular. Vigila ${nombres.ifBlank { "esos dispositivos" }} y programa revision preventiva."
-            }
-            else -> {
-                "Todo funciona correctamente segun $buenas inspeccion(es) registradas. Mantente al dia con los mantenimientos preventivos."
-            }
+        return runCatching {
+            aiService.generateGeneralInspectionFeedback(inspeccionesPorDispositivo)
+        }.getOrElse {
+            MaintenanceAiService.generarFeedbackGeneralLocal(inspeccionesPorDispositivo)
         }
     }
 

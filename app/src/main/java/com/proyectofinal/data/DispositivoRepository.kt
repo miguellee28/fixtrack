@@ -473,7 +473,6 @@ class DispositivoRepository(context: Context) {
                     ContentValues().apply {
                         put(DatabaseHelper.COL_ITEM_NOTAS, item.notas)
                         put(DatabaseHelper.COL_ITEM_CONDICION, if (item.tipo == "inspeccion") item.condicion else "")
-                        put(DatabaseHelper.COL_ITEM_COMPLETADA, 1)
                     },
                     "${DatabaseHelper.COL_ITEM_ID} = ? AND ${DatabaseHelper.COL_ITEM_TAREA_ID} = ?",
                     arrayOf(item.id.toString(), tareaId.toString())
@@ -710,8 +709,7 @@ class DispositivoRepository(context: Context) {
         nombre = getString(getColumnIndexOrThrow("nombre")),
         descripcion = getString(getColumnIndexOrThrow("descripcion")),
         notas = getString(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_NOTAS)).orEmpty(),
-        condicion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_CONDICION)).orEmpty(),
-        completada = getInt(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_COMPLETADA)) == 1
+        condicion = getString(getColumnIndexOrThrow(DatabaseHelper.COL_ITEM_CONDICION)).orEmpty()
     )
 
     private fun Cursor.getLongOrZero(columna: String): Long {

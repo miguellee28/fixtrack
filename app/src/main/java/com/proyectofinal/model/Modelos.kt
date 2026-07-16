@@ -44,8 +44,7 @@ data class TareaItem(
     val nombre: String = "",
     val descripcion: String = "",
     val notas: String = "",
-    val condicion: String = "",
-    val completada: Boolean = false
+    val condicion: String = ""
 )
 
 data class TareaFoto(

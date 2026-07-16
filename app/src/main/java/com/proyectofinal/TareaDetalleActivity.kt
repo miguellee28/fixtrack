@@ -275,7 +275,7 @@ class TareaDetalleActivity : AppCompatActivity() {
             val item = itemsExistentes.firstOrNull { it.id == itemId } ?: continue
             if (item.tipo == "mantenimiento") {
                 val notas = vista.findViewById<EditText>(R.id.campo_notas_mantenimiento)?.text.toString().trim()
-                actualizados.add(item.copy(notas = notas, completada = true))
+                actualizados.add(item.copy(notas = notas))
             } else {
                 val condicion = condicionSeleccionada(vista)
                 if (condicion.isBlank()) {
@@ -283,7 +283,7 @@ class TareaDetalleActivity : AppCompatActivity() {
                     return
                 }
                 val notas = vista.findViewById<EditText>(R.id.campo_notas_inspeccion)?.text.toString().trim()
-                actualizados.add(item.copy(notas = notas, condicion = condicion, completada = true))
+                actualizados.add(item.copy(notas = notas, condicion = condicion))
             }
         }
         val fecha = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
