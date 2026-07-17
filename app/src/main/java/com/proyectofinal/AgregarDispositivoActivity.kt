@@ -152,12 +152,12 @@ class AgregarDispositivoActivity : AppCompatActivity() {
             }
 
             val dispositivo = Dispositivo(nombre = nombre, categoria = categoria, marca = marca, modelo = modelo, foto = rutaFotoDispositivo())
-            val tareas = construirTareas()
+            val mantenimientos = construirMantenimientos()
             val inspecciones = construirInspecciones()
 
             lifecycleScope.launch {
                 runCatching {
-                    viewModel.guardarDispositivoConCalendario(dispositivo, tareas, inspecciones)
+                    viewModel.guardarDispositivoConCalendario(dispositivo, mantenimientos, inspecciones)
                 }.onSuccess {
                     Toast.makeText(this@AgregarDispositivoActivity, "Dispositivo guardado", Toast.LENGTH_SHORT).show()
                     setResult(RESULT_OK)
@@ -169,8 +169,8 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         }
     }
 
-    private fun construirTareas(): List<Tarea> {
-        val tareas = mutableListOf<Tarea>()
+    private fun construirMantenimientos(): List<Mantenimiento> {
+        val mantenimientos = mutableListOf<Mantenimiento>()
 
         for (i in 0 until contenedorTarjetas.childCount) {
             val vista = contenedorTarjetas.getChildAt(i)
@@ -181,12 +181,12 @@ class AgregarDispositivoActivity : AppCompatActivity() {
                     val desc = vista.findViewById<EditText>(R.id.campo_descripcion)?.text.toString().trim()
                     val repetir = vista.findViewById<Spinner>(R.id.spinner_repetir)?.selectedItem?.toString() ?: "Una vez"
                     val fecha = vista.findViewById<TextView>(R.id.texto_fecha_tarea)?.text.toString()
-                    tareas.add(Tarea(nombre = nombre, descripcion = desc, fecha = fecha, repetirCada = repetir))
+                    mantenimientos.add(Mantenimiento(nombre = nombre, descripcion = desc, fecha = fecha, repetirCada = repetir))
                 }
             }
         }
 
-        return tareas
+        return mantenimientos
     }
 
     private fun construirInspecciones(): List<Inspeccion> {
@@ -414,7 +414,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         seleccionarSpinnerPorTexto(contenedorTarjetas.findViewById(R.id.spinner_categoria), dispositivo.categoria)
 
         eliminarTarjetasProgramadas()
-        resultado.tareas.forEach { agregarTarjetaTareaDesdeIA(it) }
+        resultado.mantenimientos.forEach { agregarTarjetaTareaDesdeIA(it) }
         resultado.inspecciones.forEach { agregarTarjetaInspeccionDesdeIA(it) }
 
         textoEstadoIA?.text = getString(R.string.calendario_generado)
@@ -440,7 +440,7 @@ class AgregarDispositivoActivity : AppCompatActivity() {
         }
     }
 
-    private fun agregarTarjetaTareaDesdeIA(tarea: Tarea) {
+    private fun agregarTarjetaTareaDesdeIA(tarea: Mantenimiento) {
         val vista = LayoutInflater.from(this).inflate(R.layout.layout_tarea, contenedorTarjetas, false)
         configurarCalendarioTarea(vista, tarea.fecha)
         vista.findViewById<EditText>(R.id.campo_nombre_tarea)?.setText(tarea.nombre)

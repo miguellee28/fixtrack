@@ -47,12 +47,9 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
         }
 
         createChannel(context)
-        val isTask = type == MaintenanceNotificationScheduler.TYPE_TASK
         val title = when {
-            isOverdueItem && isTask -> "Mantenimiento atrasado"
-            isOverdueItem -> "Inspeccion atrasada"
-            isTask -> "Mantenimiento hoy"
-            else -> "Inspeccion hoy"
+            isOverdueItem -> "Tarea atrasada"
+            else -> "Tarea para hoy"
         }
         val deviceName = item.nombreDispositivo.ifBlank {
             intent.getStringExtra(MaintenanceNotificationScheduler.EXTRA_DEVICE_NAME).orEmpty()
@@ -101,26 +98,13 @@ class MaintenanceNotificationReceiver : BroadcastReceiver() {
                 repository.obtenerTareas()
                     .firstOrNull { it.id == id && !it.completada }
                     ?.let { tarea ->
+                        val item = repository.obtenerItemsPorTarea(tarea.id).firstOrNull()
                         ItemProgramado(
                             id = tarea.id,
-                            nombre = tarea.nombre,
-                            descripcion = tarea.descripcion,
+                            nombre = item?.nombre ?: "Tarea programada",
+                            descripcion = item?.descripcion.orEmpty(),
                             fecha = tarea.fecha,
                             nombreDispositivo = dispositivos[tarea.dispositivoId]?.nombre.orEmpty(),
-                            tipo = type
-                        )
-                    }
-            }
-            MaintenanceNotificationScheduler.TYPE_INSPECTION -> {
-                repository.obtenerInspecciones()
-                    .firstOrNull { it.id == id && !it.completada }
-                    ?.let { inspeccion ->
-                        ItemProgramado(
-                            id = inspeccion.id,
-                            nombre = inspeccion.nombre,
-                            descripcion = inspeccion.descripcion,
-                            fecha = inspeccion.fecha,
-                            nombreDispositivo = dispositivos[inspeccion.dispositivoId]?.nombre.orEmpty(),
                             tipo = type
                         )
                     }

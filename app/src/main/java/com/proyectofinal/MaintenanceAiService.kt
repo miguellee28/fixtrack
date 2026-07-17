@@ -21,7 +21,7 @@ data class AiSource(
 
 data class AiMaintenanceResult(
     val dispositivo: Dispositivo,
-    val tareas: List<Tarea>,
+    val mantenimientos: List<Mantenimiento>,
     val inspecciones: List<Inspeccion>,
     val fuentes: List<AiSource>
 )
@@ -189,7 +189,7 @@ class MaintenanceAiService(
 ) {
     fun generateInspectionFeedback(
         dispositivo: Dispositivo,
-        detalles: List<TareaDetalle>
+        detalles: List<TareaItem>
     ): String {
         val inspecciones = detalles.filter { it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank()) }
         if (inspecciones.isEmpty()) {
@@ -197,7 +197,7 @@ class MaintenanceAiService(
         }
 
         val inspeccionesTexto = inspecciones.joinToString("\n") { detalle ->
-            "- ${detalle.nombre}: estado=${detalle.condicion.ifBlank { "sin estado" }}, notas=${detalle.notas.ifBlank { "sin notas" }}, fecha=${detalle.fechaCompletada ?: "sin fecha"}"
+            "- ${detalle.nombre}: estado=${detalle.condicion.ifBlank { "sin estado" }}, notas=${detalle.notas.ifBlank { "sin notas" }}"
         }
 
         val prompt = """
@@ -229,6 +229,63 @@ class MaintenanceAiService(
 
         val json = parseJsonObject(genAiClient.generateJson(prompt))
         return json.optString("feedback").ifBlank { generarFeedbackLocal(detalles) }
+    }
+
+    fun generateGeneralInspectionFeedback(
+        inspeccionesPorDispositivo: List<Pair<Dispositivo, List<TareaItem>>>
+    ): String {
+        val historiales = inspeccionesPorDispositivo.mapNotNull { (dispositivo, detalles) ->
+            val inspecciones = detalles.filter {
+                it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())
+            }
+            if (inspecciones.isEmpty()) null else dispositivo to inspecciones
+        }
+        val totalInspecciones = historiales.sumOf { it.second.size }
+        if (totalInspecciones == 0) {
+            return "Aun no hay inspecciones completadas con estado. Completa una inspeccion para recibir un diagnostico general."
+        }
+
+        val historialTexto = historiales.joinToString("\n\n") { (dispositivo, inspecciones) ->
+            val inspeccionesTexto = inspecciones.joinToString("\n") { inspeccion ->
+                "- ${inspeccion.nombre}: estado=${inspeccion.condicion.ifBlank { "sin estado" }}, " +
+                    "notas=${inspeccion.notas.ifBlank { "sin notas" }}"
+            }
+            """
+                Dispositivo: ${dispositivo.nombre}
+                Categoria: ${dispositivo.categoria}
+                Marca/modelo: ${dispositivo.marca} ${dispositivo.modelo}
+                Inspecciones:
+                $inspeccionesTexto
+            """.trimIndent()
+        }
+
+        val prompt = """
+            Analiza las inspecciones completadas de todos los dispositivos y genera un resumen con diagnostico general orientativo.
+
+            Dispositivos con inspecciones: ${historiales.size}
+            Total de inspecciones: $totalInspecciones
+
+            $historialTexto
+
+            Devuelve solo JSON valido con esta forma:
+            {
+              "resumen": "resumen y diagnostico general en espanol"
+            }
+
+            Reglas:
+            - Basa el diagnostico solamente en los estados y notas proporcionados.
+            - Prioriza los dispositivos con estado malo, luego regular y finalmente bueno.
+            - Menciona por nombre los dispositivos que requieren atencion y recomienda una accion concreta respaldada por sus inspecciones o notas.
+            - Si todo esta bueno, indica que el estado general es favorable y recomienda continuar el mantenimiento preventivo.
+            - No inventes fallas, piezas ni causas que no aparezcan en los datos.
+            - Aclara brevemente que el diagnostico es orientativo cuando exista un estado malo.
+            - Usa lenguaje simple y un maximo de 6 oraciones.
+        """.trimIndent()
+
+        val json = parseJsonObject(genAiClient.generateJson(prompt))
+        return json.optString("resumen").ifBlank {
+            generarFeedbackGeneralLocal(inspeccionesPorDispositivo)
+        }
     }
 
     fun generateSchedule(
@@ -388,7 +445,7 @@ class MaintenanceAiService(
         )
         return AiMaintenanceResult(
             dispositivo = parsedDevice,
-            tareas = parseTareas(json.optJSONArray("mantenimientos"), today),
+            mantenimientos = parseMantenimientos(json.optJSONArray("mantenimientos"), today),
             inspecciones = parseInspecciones(json.optJSONArray("inspecciones"), today),
             fuentes = parseSources(json.optJSONArray("fuentes")).ifEmpty {
                 searchResults.take(5).map { AiSource(it.title, it.url) }
@@ -407,9 +464,9 @@ class MaintenanceAiService(
         ).distinct()
     }
 
-    private fun parseTareas(items: JSONArray?, defaultDate: String): List<Tarea> {
+    private fun parseMantenimientos(items: JSONArray?, defaultDate: String): List<Mantenimiento> {
         return parseScheduledItems(items).map {
-            Tarea(
+            Mantenimiento(
                 nombre = it.nombre,
                 descripcion = it.descripcion,
                 fecha = it.fecha.ifBlank { defaultDate },
@@ -513,7 +570,7 @@ class MaintenanceAiService(
     }
 
     companion object {
-        fun generarFeedbackLocal(detalles: List<TareaDetalle>): String {
+        fun generarFeedbackLocal(detalles: List<TareaItem>): String {
             val inspecciones = detalles.filter { it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank()) }
             if (inspecciones.isEmpty()) {
                 return "Aun no hay inspecciones completadas con estado. Completa una inspeccion para recibir feedback."
@@ -524,6 +581,37 @@ class MaintenanceAiService(
                 malas > 0 -> "Hay $malas inspeccion(es) en mal estado. Revisa esas observaciones cuanto antes y atiende el problema antes de seguir usando el dispositivo de forma normal."
                 regulares > 0 -> "Hay $regulares inspeccion(es) en estado regular. El dispositivo puede seguir funcionando, pero conviene vigilar esas partes y programar una revision preventiva."
                 else -> "Todo funciona correctamente segun las inspecciones registradas. Mantente al dia con el calendario preventivo para conservar el buen estado del dispositivo."
+            }
+        }
+
+        fun generarFeedbackGeneralLocal(
+            inspeccionesPorDispositivo: List<Pair<Dispositivo, List<TareaItem>>>
+        ): String {
+            val detalles = inspeccionesPorDispositivo.flatMap { (dispositivo, inspecciones) ->
+                inspecciones
+                    .filter { it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank()) }
+                    .map { dispositivo to it }
+            }
+            if (detalles.isEmpty()) {
+                return "Aun no hay inspecciones completadas con estado. Completa una inspeccion para conocer la condicion general."
+            }
+
+            val malas = detalles.filter { it.second.condicion == "malo" }
+            val regulares = detalles.filter { it.second.condicion == "regular" }
+            val buenas = detalles.count { it.second.condicion == "bueno" }
+            return when {
+                malas.isNotEmpty() -> {
+                    val dispositivos = malas.map { it.first.nombre }.distinct().take(3).joinToString(", ")
+                    "Diagnostico general: hay ${malas.size} inspeccion(es) en mal estado. " +
+                        "Atiende primero ${dispositivos.ifBlank { "los dispositivos afectados" }} y revisa sus observaciones antes de continuar el uso normal. " +
+                        "Este diagnostico es orientativo."
+                }
+                regulares.isNotEmpty() -> {
+                    val dispositivos = regulares.map { it.first.nombre }.distinct().take(3).joinToString(", ")
+                    "Diagnostico general: hay ${regulares.size} inspeccion(es) en estado regular. " +
+                        "Vigila ${dispositivos.ifBlank { "los dispositivos indicados" }} y programa una revision preventiva."
+                }
+                else -> "Diagnostico general favorable: las $buenas inspeccion(es) registradas estan en buen estado. Continua con el mantenimiento preventivo."
             }
         }
     }

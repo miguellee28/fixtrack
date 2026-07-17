@@ -1,12 +1,17 @@
 package com.proyectofinal.viewmodel
 
-// Estado y operaciones que consumen las pantallas.
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.proyectofinal.MaintenanceNotificationScheduler
 import com.proyectofinal.data.DispositivoRepository
-import com.proyectofinal.model.*
+import com.proyectofinal.model.Dispositivo
+import com.proyectofinal.model.Inspeccion
+import com.proyectofinal.model.ItemProgramado
+import com.proyectofinal.model.Mantenimiento
+import com.proyectofinal.model.Tarea
+import com.proyectofinal.model.TareaFoto
+import com.proyectofinal.model.TareaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -47,25 +52,18 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     fun cargarDispositivos() {
         viewModelScope.launch {
-            val datos = withContext(Dispatchers.IO) {
-                repository.obtenerTodos()
-            }
-            _dispositivos.value = datos
+            _dispositivos.value = withContext(Dispatchers.IO) { repository.obtenerTodos() }
         }
     }
 
     suspend fun actualizarDispositivo(dispositivo: Dispositivo) {
-        withContext(Dispatchers.IO) {
-            repository.actualizar(dispositivo)
-        }
+        withContext(Dispatchers.IO) { repository.actualizar(dispositivo) }
         cargarDispositivos()
     }
 
     fun eliminarDispositivo(id: Long) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.eliminar(id)
-            }
+            withContext(Dispatchers.IO) { repository.eliminar(id) }
             reprogramarNotificaciones()
             cargarDispositivos()
             cargarHomeData()
@@ -73,44 +71,27 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    suspend fun marcarTareaCompletada(id: Long) {
-        withContext(Dispatchers.IO) {
-            repository.marcarTareaCompletada(id)
-        }
-        reprogramarNotificaciones()
-        cargarHomeData()
-        cargarCalendarioData()
-    }
-
-    suspend fun completarInspeccion(
-        id: Long,
-        condicion: String,
-        notas: String,
+    suspend fun completarTarea(
+        tareaId: Long,
+        items: List<TareaItem>,
         fotos: List<String>,
         fechaCompletada: String
     ) {
         withContext(Dispatchers.IO) {
-            repository.completarInspeccion(id, condicion, notas, fotos, fechaCompletada)
+            repository.completarTarea(tareaId, items, fotos, fechaCompletada)
         }
         reprogramarNotificaciones()
         cargarHomeData()
         cargarCalendarioData()
     }
 
-    // ==================== HOME DATA ====================
-
     fun cargarHomeData() {
         viewModelScope.launch {
-            val pasadas = withContext(Dispatchers.IO) { repository.obtenerItemsPasadas() }
-            val proximas = withContext(Dispatchers.IO) { repository.obtenerItemsProximas() }
-            val lejanas = withContext(Dispatchers.IO) { repository.obtenerItemsLejanas() }
-            _tareasPasadas.value = pasadas
-            _tareasProximas.value = proximas
-            _tareasLejanas.value = lejanas
+            _tareasPasadas.value = withContext(Dispatchers.IO) { repository.obtenerItemsPasadas() }
+            _tareasProximas.value = withContext(Dispatchers.IO) { repository.obtenerItemsProximas() }
+            _tareasLejanas.value = withContext(Dispatchers.IO) { repository.obtenerItemsLejanas() }
         }
     }
-
-    // ==================== CALENDARIO DATA ====================
 
     fun seleccionarTabCalendario(tab: String) {
         _tareaSeleccionada.value = tab
@@ -121,46 +102,35 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             when (_tareaSeleccionada.value) {
                 "proximo" -> {
-                    val datos = withContext(Dispatchers.IO) {
+                    _calendarioProximas.value = withContext(Dispatchers.IO) {
                         (repository.obtenerItemsProximas() + repository.obtenerItemsLejanas())
-                            .distinctBy { "${it.tipo}:${it.id}" }
+                            .distinctBy { "${it.id}:${it.tipo}:${it.nombre}:${it.descripcion}" }
                             .sortedBy { it.fecha }
                     }
-                    _calendarioProximas.value = datos
                 }
                 "atrasado" -> {
-                    val datos = withContext(Dispatchers.IO) { repository.obtenerItemsPasadas() }
-                    _tareasPasadas.value = datos
+                    _tareasPasadas.value = withContext(Dispatchers.IO) { repository.obtenerItemsPasadas() }
                 }
                 "completado" -> {
-                    val datos = withContext(Dispatchers.IO) { repository.obtenerItemsCompletadas() }
-                    _tareasCompletadas.value = datos
+                    _tareasCompletadas.value = withContext(Dispatchers.IO) { repository.obtenerItemsCompletadas() }
                 }
             }
         }
     }
 
-    // ==================== TAREA DETALLES ====================
+    fun obtenerTarea(tareaId: Long): Tarea? = repository.obtenerTareaPorId(tareaId)
 
-    fun cargarDetallesPorTarea(tareaId: Long): List<TareaDetalle> {
-        return repository.obtenerDetallesPorTarea(tareaId)
-    }
+    fun obtenerItemsPorTarea(tareaId: Long): List<TareaItem> = repository.obtenerItemsPorTarea(tareaId)
 
-    suspend fun actualizarTareaDetalle(detalle: TareaDetalle) {
-        withContext(Dispatchers.IO) {
-            repository.actualizarTareaDetalle(detalle)
-        }
-    }
-
-    // ==================== GUARDAR TODO ====================
+    fun obtenerFotosPorTarea(tareaId: Long): List<TareaFoto> = repository.obtenerFotosPorTarea(tareaId)
 
     suspend fun guardarDispositivoConCalendario(
         dispositivo: Dispositivo,
-        tareas: List<Tarea>,
+        mantenimientos: List<Mantenimiento>,
         inspecciones: List<Inspeccion>
     ): Long {
         val dispositivoId = withContext(Dispatchers.IO) {
-            repository.guardarDispositivoConCalendario(dispositivo, tareas, inspecciones)
+            repository.guardarDispositivoConCalendario(dispositivo, mantenimientos, inspecciones)
         }
         reprogramarNotificaciones()
         cargarHomeData()
@@ -169,37 +139,37 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
         return dispositivoId
     }
 
-    suspend fun guardarTareasEInspecciones(
+    suspend fun guardarMantenimientosEInspecciones(
         dispositivoId: Long?,
-        tareas: List<Tarea>,
+        mantenimientos: List<Mantenimiento>,
         inspecciones: List<Inspeccion>
     ) {
-        val idDispositivo = dispositivoId ?: 0
         withContext(Dispatchers.IO) {
-            repository.guardarCalendario(idDispositivo, tareas, inspecciones)
+            repository.guardarCalendario(dispositivoId ?: 0, mantenimientos, inspecciones)
         }
-        reprogramarNotificaciones()
-        cargarHomeData()
-        cargarCalendarioData()
-        cargarDispositivos()
+        actualizarDespuesDeCalendario()
     }
 
     suspend fun guardarEdicionCalendario(
         dispositivoId: Long,
-        tareas: List<Tarea>,
+        mantenimientos: List<Mantenimiento>,
         inspecciones: List<Inspeccion>,
-        tareasEliminadas: Set<Long> = emptySet(),
+        mantenimientosEliminados: Set<Long> = emptySet(),
         inspeccionesEliminadas: Set<Long> = emptySet()
     ) {
         withContext(Dispatchers.IO) {
             repository.guardarEdicionCalendario(
                 dispositivoId,
-                tareas,
+                mantenimientos,
                 inspecciones,
-                tareasEliminadas,
+                mantenimientosEliminados,
                 inspeccionesEliminadas
             )
         }
+        actualizarDespuesDeCalendario()
+    }
+
+    private suspend fun actualizarDespuesDeCalendario() {
         reprogramarNotificaciones()
         cargarHomeData()
         cargarCalendarioData()
@@ -208,25 +178,12 @@ class DispositivosViewModel(app: Application) : AndroidViewModel(app) {
 
     fun obtenerTodosDispositivos(): List<Dispositivo> = repository.obtenerTodos()
 
-    fun obtenerTareasPorDispositivo(dispositivoId: Long): List<Tarea> {
-        return repository.obtenerTareasPorDispositivo(dispositivoId)
-    }
+    fun obtenerMantenimientosPorDispositivo(dispositivoId: Long): List<Mantenimiento> =
+        repository.obtenerMantenimientosPorDispositivo(dispositivoId)
 
-    fun obtenerInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> {
-        return repository.obtenerInspeccionesPorDispositivo(dispositivoId)
-    }
+    fun obtenerInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> =
+        repository.obtenerInspeccionesPorDispositivo(dispositivoId)
 
-    fun obtenerTodasTareasPorDispositivo(dispositivoId: Long): List<Tarea> {
-        return repository.obtenerTodasTareasPorDispositivo(dispositivoId)
-    }
-
-    fun obtenerTodasInspeccionesPorDispositivo(dispositivoId: Long): List<Inspeccion> {
-        return repository.obtenerTodasInspeccionesPorDispositivo(dispositivoId)
-    }
-
-    suspend fun obtenerInspeccionPorId(id: Long): Inspeccion? {
-        return withContext(Dispatchers.IO) {
-            repository.obtenerInspeccionPorId(id)
-        }
-    }
+    fun obtenerResultadosInspeccionPorDispositivo(dispositivoId: Long): List<TareaItem> =
+        repository.obtenerResultadosInspeccionPorDispositivo(dispositivoId)
 }

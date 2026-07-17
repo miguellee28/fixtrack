@@ -24,7 +24,6 @@ import android.widget.ListView
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
@@ -47,6 +46,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var contenedorPantallas: FrameLayout
     private lateinit var viewModel: DispositivosViewModel
     private var pantallaActual = ID_INICIO
+    private val aiService by lazy {
+        MaintenanceAiService(
+            GoogleGenAiClient(BuildConfig.GOOGLE_GENAI_API_KEY),
+            BraveSearchClient(BuildConfig.BRAVE_SEARCH_API_KEY)
+        )
+    }
 
     companion object {
         private const val ID_INICIO = 1
@@ -284,7 +289,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun agruparPorFechaYDispositivo(items: List<ItemProgramado>): List<List<ItemProgramado>> {
-        return items.groupBy { Pair(it.fecha, it.nombreDispositivo.ifBlank { "Sin dispositivo" }) }.values.toList()
+        return items.groupBy { it.id }.values.toList()
     }
 
     private fun Int.dp(): Int = (this * resources.displayMetrics.density).toInt()
@@ -321,7 +326,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resumenGrupo(grupo: List<ItemProgramado>): String {
         return itemsVisiblesGrupo(grupo).joinToString(separator = "\n") { item ->
-            val tipo = if (item.tipo == "tarea") "Mantenimiento" else "Inspeccion"
+            val tipo = if (item.tipo == "mantenimiento") "Mantenimiento" else "Inspeccion"
             "$tipo: ${item.nombre}"
         }
     }
@@ -336,20 +341,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun abrirDetalleGrupo(grupo: List<ItemProgramado>, soloLectura: Boolean = false) {
-        val tareas = grupo.filter { it.tipo == "tarea" }
-        if (tareas.isNotEmpty()) {
-            val primera = tareas.first()
-            val intent = Intent(this, TareaDetalleActivity::class.java).apply {
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, primera.id)
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_IDS, tareas.map { it.id }.toLongArray())
-                putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
-                putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
-                putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
-            }
-            resultadoTareaDetalle.launch(intent)
-        } else {
-            abrirDetalleInspeccion(grupo.first(), soloLectura)
+        val primera = grupo.firstOrNull() ?: return
+        val intent = Intent(this, TareaDetalleActivity::class.java).apply {
+            putExtra(TareaDetalleActivity.EXTRA_TAREA_ID, primera.id)
+            putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, primera.nombreDispositivo)
+            putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, primera.fecha)
+            putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
         }
+        resultadoTareaDetalle.launch(intent)
     }
 
     private fun cargarPreferencias() {
@@ -455,35 +454,14 @@ class MainActivity : AppCompatActivity() {
             return "Agrega un dispositivo para empezar a recibir resumenes del estado general."
         }
 
-        var inspeccionesConEstado = 0
-        var malas = 0
-        var regulares = 0
-        var buenas = 0
-        val dispositivosConAlerta = mutableSetOf<String>()
-
-        for (dispositivo in dispositivos) {
-            val detallesDeTareas = viewModel.obtenerTodasTareasPorDispositivo(dispositivo.id)
-                .flatMap { tarea ->
-                    viewModel.cargarDetallesPorTarea(tarea.id).map { detalle ->
-                        DetalleInspeccionProgramada(detalle, tarea.fecha)
-                    }
-                }
-            val inspeccionesIndependientes = viewModel.obtenerTodasInspeccionesPorDispositivo(dispositivo.id)
-            val detalles = InspectionSummaryUtils.combinarInspeccionesUnicas(
-                detallesDeTareas,
-                inspeccionesIndependientes
-            ).filter { it.condicion.isNotBlank() }
-
-            inspeccionesConEstado += detalles.size
-            malas += detalles.count { it.condicion == "malo" }
-            regulares += detalles.count { it.condicion == "regular" }
-            buenas += detalles.count { it.condicion == "bueno" }
-
-            if (detalles.any { it.condicion == "malo" || it.condicion == "regular" }) {
-                dispositivosConAlerta.add(dispositivo.nombre)
+        val inspeccionesPorDispositivo = dispositivos.map { dispositivo ->
+            dispositivo to viewModel.obtenerResultadosInspeccionPorDispositivo(dispositivo.id)
+        }
+        val inspeccionesConEstado = inspeccionesPorDispositivo.sumOf { (_, detalles) ->
+            detalles.count {
+                it.tipo == "inspeccion" && (it.condicion.isNotBlank() || it.notas.isNotBlank())
             }
         }
-
         if (inspeccionesConEstado == 0) {
             val cantidadDispositivos = if (dispositivos.size == 1) {
                 "Tienes 1 dispositivo registrado."
@@ -493,18 +471,10 @@ class MainActivity : AppCompatActivity() {
             return "$cantidadDispositivos Completa las inspecciones indicando si el estado es Bueno, Regular o Malo para conocer su condición general."
         }
 
-        return when {
-            malas > 0 -> {
-                val nombres = dispositivosConAlerta.take(2).joinToString(", ")
-                "Atencion: hay $malas inspeccion(es) en mal estado. Revisa primero ${nombres.ifBlank { "los dispositivos marcados" }}."
-            }
-            regulares > 0 -> {
-                val nombres = dispositivosConAlerta.take(2).joinToString(", ")
-                "Hay $regulares inspeccion(es) en estado regular. Vigila ${nombres.ifBlank { "esos dispositivos" }} y programa revision preventiva."
-            }
-            else -> {
-                "Todo funciona correctamente segun $buenas inspeccion(es) registradas. Mantente al dia con los mantenimientos preventivos."
-            }
+        return runCatching {
+            aiService.generateGeneralInspectionFeedback(inspeccionesPorDispositivo)
+        }.getOrElse {
+            MaintenanceAiService.generarFeedbackGeneralLocal(inspeccionesPorDispositivo)
         }
     }
 
@@ -580,18 +550,6 @@ class MainActivity : AppCompatActivity() {
         listaCalendario.adapter = AdaptadorTareasCalendario(this, items) { grupo ->
             abrirDetalleGrupo(grupo, soloLectura)
         }
-    }
-
-    private fun abrirDetalleInspeccion(item: ItemProgramado, soloLectura: Boolean) {
-        val intent = Intent(this, TareaDetalleActivity::class.java).apply {
-            putExtra(TareaDetalleActivity.EXTRA_INSPECCION_ID, item.id)
-            putExtra(TareaDetalleActivity.EXTRA_INSPECCION_NOMBRE, item.nombre)
-            putExtra(TareaDetalleActivity.EXTRA_INSPECCION_DESCRIPCION, item.descripcion)
-            putExtra(TareaDetalleActivity.EXTRA_DISPOSITIVO_NOMBRE, item.nombreDispositivo)
-            putExtra(TareaDetalleActivity.EXTRA_TAREA_FECHA, item.fecha)
-            putExtra(TareaDetalleActivity.EXTRA_SOLO_LECTURA, soloLectura)
-        }
-        resultadoTareaDetalle.launch(intent)
     }
 
     private fun configurarAjustes() {
@@ -671,7 +629,7 @@ class MainActivity : AppCompatActivity() {
     ) : BaseAdapter() {
 
         private val grupos = items
-            .groupBy { Pair(it.fecha, it.nombreDispositivo.ifBlank { "Sin dispositivo" }) }
+            .groupBy { it.id }
             .values
             .toList()
 
@@ -703,7 +661,7 @@ class MainActivity : AppCompatActivity() {
 
         private fun resumenGrupoCalendario(grupo: List<ItemProgramado>): String {
             return itemsVisiblesGrupoCalendario(grupo).joinToString(separator = "\n") { item ->
-                val tipo = if (item.tipo == "tarea") "Mantenimiento" else "Inspeccion"
+                val tipo = if (item.tipo == "mantenimiento") "Mantenimiento" else "Inspeccion"
                 "$tipo: ${item.nombre}"
             }
         }

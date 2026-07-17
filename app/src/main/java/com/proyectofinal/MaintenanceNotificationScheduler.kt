@@ -16,7 +16,6 @@ object MaintenanceNotificationScheduler {
     const val EXTRA_DEVICE_NAME = "extra_device_name"
 
     const val TYPE_TASK = "tarea"
-    const val TYPE_INSPECTION = "inspeccion"
 
     fun scheduleAll(context: Context) {
         val appContext = context.applicationContext
@@ -32,18 +31,6 @@ object MaintenanceNotificationScheduler {
                     type = TYPE_TASK,
                     deviceName = dispositivos[tarea.dispositivoId]?.nombre.orEmpty(),
                     date = tarea.fecha
-                )
-            }
-
-        repository.obtenerInspecciones()
-            .filterNot { it.completada }
-            .forEach { inspeccion ->
-                scheduleItem(
-                    context = appContext,
-                    id = inspeccion.id,
-                    type = TYPE_INSPECTION,
-                    deviceName = dispositivos[inspeccion.dispositivoId]?.nombre.orEmpty(),
-                    date = inspeccion.fecha
                 )
             }
     }
